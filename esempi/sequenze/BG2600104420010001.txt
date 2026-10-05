@@ -1,0 +1,26 @@
+Sample Name:	BG2600104420010001
+	
+	
+	
+	
+	
+	
+	
+Component	Amount 
+	
+	
+Fluoruri	n.a.
+Cloriti	n.a.
+Cloruri	0,7733
+Nitriti	n.a.
+Clorati	n.a.
+Nitrati	8,6948
+Solfati	3,8142
+	
+	
+	
+	
+	
+	
+	
+	

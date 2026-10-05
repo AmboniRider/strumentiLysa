@@ -1,0 +1,13 @@
+specifiche per il driver per lo strumento Mettler Toledo:
+un singolo file contiene dati per più campioni
+separatore ;
+
+riga 1 saltare
+riga 2 saltare
+riga 3 intestazione
+
+prima colonna : (ID campione 1) contiene il codice del campione da 18 caratteri
+seconda colonna: (Titolo) contiene il codice dell'esame
+terza colonna: (Risultato) contiene il valore del risultato numerico (necessario modificare il separatore decimale con il .)
+
+le altre colonne non servono.

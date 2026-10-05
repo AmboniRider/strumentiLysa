@@ -1,0 +1,42 @@
+# Ambienti e cache locali: ricreati tramite uv, non portabili fra PC.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pytest-*/
+.uv-cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Database, risultati e file strumentali operativi restano sulla postazione.
+# I file di esempio in esempi/ sono invece inclusi nel repository.
+/data/
+/sequenze/
+/archiviati/
+/errori/
+/export/
+*.db
+*.db-wal
+*.db-shm
+
+# Build, impostazioni personali e credenziali.
+build/
+dist/
+*.egg-info/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.aws/
+.codex/
+.agents/
+.idea/
+.vscode/
+.git-sandbox-backup/
+Thumbs.db
+Desktop.ini
+*.log

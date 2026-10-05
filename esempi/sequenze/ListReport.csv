@@ -1,0 +1,11 @@
+Editor risultati;;;;;;;;;;;;; ;
+Dettagli risultato;;;;;;;;;;;;;;
+ID campione 1;Titolo;Risultato;Ora creazione;Nome metodo;Strumento;Utente;T1-;Escluso;T1+;Commento;Stato risultato complessivo;Tipo di metodo;Tipo Determinazione;Spazio di lavoro
+BG2600036590010001;Conducibilita';293,370 uS;09/09/2026 10:15:16;pH Cond;T70 (T70);SystemInternal;292,768165;False;293,545168;;OK;GT;Determinazione campione TG;Spazio di lavoro A
+BG2600036590020001;Conducibilita';292,990 uS;09/09/2026 10:16:56;pH Cond;T70 (T70);SystemInternal;292,768165;False;293,545168;;OK;GT;Determinazione campione TG;Spazio di lavoro A
+BG2600036590030001;Conducibilita';293,110 uS;09/09/2026 10:18:37;pH Cond;T70 (T70);SystemInternal;292,768165;False;293,545168;;OK;GT;Determinazione campione TG;Spazio di lavoro A
+BG2600036590010001;PH;7,348;09/09/2026 10:15:16;pH Cond;T70 (T70);SystemInternal;7,337473;False;7,385194;;OK;GT;Determinazione campione TG;Spazio di lavoro A
+BG2600036590020001;PH;7,371;09/09/2026 10:16:57;pH Cond;T70 (T70);SystemInternal;7,337473;False;7,385194;;OK;GT;Determinazione campione TG;Spazio di lavoro A
+BG2600036590030001;PH;7,365;09/09/2026 10:18:38;pH Cond;T70 (T70);SystemInternal;7,337473;False;7,385194;;OK;GT;Determinazione campione TG;Spazio di lavoro A
+ ;;;;;;;;;;;;;;
+09/09/2026 10:21:35;;;;;;;;;;;;;1/1;

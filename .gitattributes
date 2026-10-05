@@ -1,0 +1,7 @@
+# Normalizza i testi per avere diff portabili; i batch richiedono CRLF su Windows.
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+*.bat text eol=crlf

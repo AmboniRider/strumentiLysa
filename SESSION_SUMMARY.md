@@ -1,0 +1,138 @@
+# SESSION SUMMARY
+
+## Decisions and Activities
+- **2026-10-05 — Repository GitHub privato e sincronizzazione**: Creato `AmboniRider/strumentiLysa` tramite la sessione GitHub già autenticata, con visibilità Private verificata. Inizializzato Git sul ramo `main` e configurato `origin`. Aggiunti `.gitignore` per escludere ambiente, cache, credenziali e dati operativi, `.gitattributes` per i terminatori dei testi, `README.md` con istruzioni di clone/avvio e `sync.bat` con commit automatico, fetch, merge e push. Verificati elenco dei file da caricare, esclusioni e modalità `--check`.
+- **2026-10-05 — Aggiornamento del manuale richiesto dall'utente**: Allineato `manuale.md` al codice per merge dei risultati già esportati, reinvio delle rettifiche, controllo della selezione per ciascun campione e significato degli stati. Corretti cartella input, nome del CSV, schema completo delle 24 colonne, normalizzazione dei valori, descrizione driver/GUI e archiviazione dei file multi-campione. Aggiornato `PROJECT_CONTEXT.md`, chiudendo il TODO documentale sul merge e registrando il punto aperto sulla selezione dei test. Verificata la guida con i test esistenti di contenuto e GUI: **5 passed** fuori dalla sandbox.
+- **2026-10-05 — Ricognizione del progetto**: Letti entry point, configurazione dipendenze, driver, modelli, servizi di import/export, schema e operazioni SQLite, flussi principali della GUI, test e documentazione. Aggiornato `PROJECT_CONTEXT.md` con componenti mancanti, flusso effettivo, versione configurabile e punti da verificare. Nessun cambiamento al codice applicativo o accesso ai contenuti del database operativo. Eseguita la suite nell'ambiente esistente tramite `uv`, senza sincronizzare o scaricare pacchetti: **45 test superati** fuori dalla sandbox.
+- **Intervista di Allineamento (/grill-me)**: Condotta una serie completa di domande interattive per sviscerare ogni aspetto architetturale, funzionale e di interfaccia del software:
+  1. *Tipo di Interfaccia*: Scelta una Desktop GUI moderna con `CustomTkinter` per garantire usabilità immediata su postazioni di laboratorio Windows.
+  2. *Flusso di Acquisizione*: Importazione manuale tramite pulsante, con scansione della cartella sorgente.
+  3. *Gestione File di Origine*: Spostamento automatico dei file validati in `archiviati/` e dei file errati in `errori/` (nessuna eliminazione distruttiva).
+  4. *Gestione Duplicati*: Segnalazione con prompt all'operatore per scegliere se sovrascrivere o saltare il campione già registrato.
+  5. *Gestione Transcodifiche*: Tabella persistita su SQLite, modificabile dall'Admin via GUI e con supporto import/export di file `transcodifica.txt`. Avviso visivo per parametri sconosciuti.
+  6. *Formato di Esportazione LIS*: Generazione automatica CSV con separatore `;`, 24 colonne fisse, virgola decimale e conversione dei non numerici in `0`. Tracciamento stato `ESPORTATO` con timestamp.
+  7. *Autenticazione e Ruoli*: Ruolo `Admin` (completo con configurazioni e utenti) e `Operatore` (operativo: import/export campioni). Utente iniziale `admin`/`admin`.
+  8. *Layout GUI*: Vista *Master-Detail* (tabella campioni selezionabili + griglia parametri di dettaglio del campione selezionato).
+  9. *Architettura Driver*: Modulo `driver.py` isolato e basato su classi/pattern driver (`BaseInstrumentDriver`, `DionexICDriver`).
+  10. *Validazione Codice Campione*: Controllo rigoroso della struttura a 18 caratteri con prefissi laboratorio configurabili.
+  11. *Filtro Temporale Default*: Visualizzazione predefinita limitata ai campioni dell'ultimo mese per ottimizzare fluidità e tempi di caricamento, con selettore rapido per consultare lo storico precedente.
+- **Aggiornamento Specifiche**: Riscritto completamente il file [progetto.md](file:///d:/pyprg/strumenti/progetto.md) con la specifica tecnica definitiva e dettagliata.
+- **Implementazione Software Completa**:
+  - *Spostamento Esempi*: Creata cartella `esempi/` con archiviazione dei file di test originali (`transcodifica.txt`, `mappatura codice campione.txt`, sequenze di test ed export CSV).
+  - *Setup uv*: Creato `pyproject.toml` con dipendenze `customtkinter`, `pillow` e `pytest`; virtual environment configurato con `uv sync`.
+  - *Driver Modulare*: Creato `driver.py` con `BaseInstrumentDriver` e `DionexICDriver`, isolando la logica di lettura e conversione `n.a.` -> `0` e normalizzazione decimale.
+  - *Validazione & Sicurezza*: Creati `validator.py` (controllo 18 caratteri) e `auth.py` (hashing SHA-256 + salt).
+  - *Database SQLite*: Creato `database.py` con tabelle relazionali, indici, seed automatico admin/admin, transcodifiche e filtri temporali.
+  - *Esportazione LIS*: Creato `exporter.py` per generazione CSV a 24 colonne conforme al tracciato fisso.
+  - *GUI CustomTkinter*: Creata interfaccia grafica moderna con Login, Dashboard Master-Detail, filtri temporali con default ad un mese, e dialogo impostazioni Admin.
+  - *Entry Point app.py*: Implementato con ANSI terminal banner e impostazione titolo console Windows (`AGENTS.md`).
+  - *Script di Lancio strumenti.bat*: Creato script batch Windows per l'avvio rapido dell'applicazione tramite doppio clic con impostazione del titolo console e codepage UTF-8.
+  - *Supporto Multi-Driver & Selezione Admin*: Esteso `driver.py` con registro driver dinamico (`get_available_driver_names`, `get_driver_by_name`, `SpectrophotometerDriver`), aggiunto tab dedicato `Driver Strumento` in `SettingsDialog` protetto da controllo credenziali `Admin`, persistenza della preferenza nel DB SQLite e passaggio al servizio di importazione.
+  - *Modifica Regole Transcodifica LIS*: Aggiunto supporto completo alla modifica di regole esistenti nel tab `Transcodifiche LIS` delle impostazioni:
+    - Metodo `update_transcoding` in `database.py` per aggiornare una regola per ID, verificando collisioni di nomi duplicati su record distinti.
+    - Pulsante dedicato `✏️ Modifica Regola` nella toolbar e supporto doppio clic sulla riga della tabella.
+    - Dialogo modale precompilato con nome parametro, codice LIS e descrizione.
+    - Tracciamento log di audit e notifica automatica callback di configurazione.
+  - *Filtro Stato Predefinito 'Da Esportare'*: Aggiornata la toolbar della maschera principale `MasterDetailView` (`src/gui/master_detail.py`) per impostare come valore predefinito `"Da Esportare"` (con elenco opzioni ordinate: `Da Esportare`, `Esportati`, `Tutti`), garantendo che all'apertura dell'applicazione vengano mostrati immediatamente i campioni pendenti da processare ed inviare al LIS.
+  - *Ordinamento Interattivo Griglie 'Transcodifiche LIS' e 'Gestione Utenti'*:
+    - Implementati metodi `_on_sort_column` e `_apply_tree_sort` in `SettingsDialog` (`src/gui/settings_dialog.py`).
+    - Ordinamento naturale: numerico per ID, cronologico per date, alfabetico case-insensitive per stringhe, con valori vuoti o '-' posizionati in coda.
+    - Clic su intestazione colonna alterna ordinamento ascendente (▲) e discendente (▼), resettando le frecce sulle altre colonne.
+    - Preservazione automatica dell'ordinamento attivo dopo operazioni di refresh (inserimento, modifica, eliminazione regola o utente).
+    - Aggiunto suggerimento visuale a testo grigio sopra ciascuna griglia per informare gli utenti della funzionalità di ordinamento.
+    - Protezione doppio clic: apertura del dialogo di modifica transcodifica limitata alle sole celle della tabella (`cell`, `tree`), escludendo le intestazioni.
+  - *Guida al Trasferimento e Distribuzione ([transer.md](file:///d:/pyprg/strumenti/transer.md))*:
+    - Redatta guida tecnica esaustiva per il deployment su nuovi PC Windows privi di ambiente Python.
+    - Dettagliato il comando PowerShell standalone per installare `uv` (`powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`).
+    - Mappatura completa e commentata delle cartelle e dei file da copiare vs da escludere tassativamente (`.venv`, `__pycache__`, `.pytest_cache`, lock SQLite).
+    - Istruzioni per `uv sync`, collaudo `uv run pytest`, avvio rapido con `strumenti.bat` e gestione di postazioni di laboratorio offline.
+  - *Diagnosi Codifica & Sanitizzazione Byte Nulli (Dionex IC)*:
+    - Analisi approfondita dei byte grezzi dei file in `sequenze/` (`BG2600036500010001.txt`, `BG2600036500020001.txt`, `BG2600036500030001.txt`).
+    - Individuata la causa della visualizzazione anomala in Blocco Note di Windows 11: i file sono record a buffer fisso di 216 byte con padding finale di byte nulli (`\x00` / NUL). L'euristica di rilevamento senza BOM di Blocco Note scambia erroneamente la sequenza di byte nulli per UTF-16 LE, unendo le coppie di byte ASCII in ideogrammi cinesi (mojibake). Notepad++ invece rileva UTF-8/ANSI e visualizza i byte come badge `[NUL]`.
+    - Aggiornato il metodo `BaseInstrumentDriver._read_text_file` in `driver.py` per rimuovere trasparentemente i byte `\x00` durante la decodifica del testo, garantendo stringhe pulite indipendentemente dal padding dello strumento.
+    - Preservati inalterati i 3 file originali in `sequenze/` come da preferenza utente.
+  - *Funzione di Eliminazione Campioni Esportati da Data (Solo Amministratori)*:
+    - Implementato metodo `get_exported_samples_from_date` in `src/database.py` per estrarre e mostrare l'anteprima dei campioni con stato `ESPORTATO` a partire da una data specificata (ore `00:00:00`), con supporto a formati `YYYY-MM-DD`, `DD/MM/YYYY` e timestamp completi.
+    - Implementato metodo `delete_exported_samples_from_date` in `src/database.py` con controllo vincolante di sicurezza sul ruolo `ADMIN` dell'utente chiamante (blocco con errore in caso di utente `OPERATORE` o sessione non valida).
+    - Cancellazione a cascata automatica di tutti i parametri analitici associati nella tabella `sample_results` tramite vincolo SQLite `ON DELETE CASCADE`.
+    - Preservazione rigorosa dei file fisici originali su disco (cartelle `archiviati/` ed `export/`) per garantire nessuna perdita accidentale di dati di laboratorio.
+    - Tracciamento dettagliato di ogni esecuzione nel registro `audit_logs` con azione `DELETE_EXPORTED_SAMPLES`, data di riferimento e numero di campioni eliminati.
+    - Aggiunta della scheda dedicata `🧹 Manutenzione Dati` nel pannello `SettingsDialog` (`src/gui/settings_dialog.py`), accessibile solo agli amministratori, provvista di scorciatoie rapide ("Oggi", "Inizio Mese", "30 Giorni Fa", "Inizio Anno"), tabella anteprima campioni coinvolti con conteggio e pulsante di eliminazione protetto da finestra modale di conferma `messagebox.askyesno`.
+    - Aggiunto pulsante di accesso rapido `🧹 Elimina Esportati` nella testata della vista principale `MasterDetailView` (`src/gui/master_detail.py`), visibile esclusivamente agli utenti con ruolo `ADMIN`, che apre direttamente il dialogo impostazioni sulla scheda di manutenzione dati.
+- **Verifica e Test Automatizzati**:
+  - Estesa la suite di test con `test_delete_exported_samples_functionality` in `tests/test_database.py` (anteprima, rifiuto operatore, errore data invalida, eliminazione corretta per admin, cascade deletion e audit log).
+  - *Driver Strumento Mettler Toledo & Supporto Multi-Campione*:
+    - Condotta sessione `/grill-me` per chiarire ogni dettaglio implementativo: raggruppamento dei campioni per ID a 18 caratteri, rimozione immediata delle unità di misura nel Risultato (`293,370 uS` -> `293,370`), riconoscimento `can_handle` basato su nome `ListReport` e intestazioni, gestione duplicati interattiva per singolo campione.
+    - Estesa la classe base `BaseInstrumentDriver` in [driver.py](file:///d:/pyprg/strumenti/driver.py) con il metodo `parse_samples` e aggiunta funzione `parse_instrument_samples`.
+    - Implementata la classe `MettlerToledoDriver` in [driver.py](file:///d:/pyprg/strumenti/driver.py), registrata in `AVAILABLE_DRIVERS` (visibile e selezionabile anche dall'Admin nelle impostazioni della GUI).
+    - Aggiornato [src/importer_service.py](file:///d:/pyprg/strumenti/src/importer_service.py) (`process_file_samples`, `import_all`, `process_single_file`) per gestire l'importazione fluida di file multi-campione, gestendo duplicati individuali e archiviazione sicura.
+    - Estesa la suite di test con 5 nuovi test dedicati in [tests/test_driver.py](file:///d:/pyprg/strumenti/tests/test_driver.py) e [tests/test_mettler_integration.py](file:///d:/pyprg/strumenti/tests/test_mettler_integration.py) con esito 100% positivo (`26 passed in 2.00s`).
+  - *Selezione Selettiva dei Test/Parametri per Campione*:
+    - Condotta sessione `/grill-me` per chiarire ogni dettaglio: stato campione `ESPORTATO` anche con export parziale dei test, selezione test locale al campione nel pannello Detail con pulsanti 'Seleziona Tutti' e 'Deseleziona', auto-deselezione nel Master se a 0 test selezionati, colonna 'N. Parametri' con formato `X/Y` (es. `2/3`), default con tutti i test selezionati.
+    - Aggiunto campo `id: Optional[int] = None` alla dataclass `ParsedResult` in `src/models.py`.
+    - Popolato l'id in `Database.get_sample_results` per identificare univocamente ciascun test salvato in `sample_results`.
+    - Aggiornato `LISExporter.export_samples` per supportare liste filtrate di risultati per campione (`s.results`), saltando campioni con 0 test e marcando come esportati solo quelli con righe scritte nel CSV.
+    - Aggiornato `MasterDetailView` in `src/gui/master_detail.py`: aggiunta colonna `Export` (`[✓]`/`[ ]`) nel pannello Detail con supporto a doppio clic e barra spaziatrice, pulsanti 'Seleziona Tutti' e 'Deseleziona' locali al campione, sincronizzazione bidirezionale con la tabella Master (formato `X/Y` in 'N. Parametri', auto-deselezione se 0 test, auto-selezione se > 0 test), contatore dinamico dei test selezionati nel footer e filtraggio dei test all'esportazione.
+    - Creata suite di test dedicata in `tests/test_selective_export.py` con 4 test (persistenza ID, export selettivo sottoinsieme parametri, esclusione campioni con 0 test, interazioni GUI e sincronizzazione bidirezionale).
+    - Suite completa passata con successo (`30 passed in 2.59s`).
+  - *Unione Intelligente dei Campioni Duplicati (Merge) & Tracciamento Esportazione LIS per Parametro*:
+    - Condotta sessione interattiva `/grill-me` per chiarire ogni dettaglio architetturale relativo ai campioni duplicati con test aggiuntivi o non inviati in precedenza:
+      1. *Comportamento di Base*: Applicazione dell'unione intelligente (Merge), aggiungendo nuovi parametri al campione esistente e aggiornando i parametri coincidenti con il nuovo valore analitico.
+      2. *Gestione Esportazione Test Precedenti*: Tracciamento per singolo parametro (`is_exported`, `exported_at`); se un campione già esportato riceve nuovi test, il campione torna `DA_ESPORTARE` e propone di default solo i nuovi test. I test già inviati rimangono considerati `Inviati` (nessuna rettifica automatica accidentale al LIS).
+      3. *Esperienza Utente in Importazione*: Integrazione automatica fluida senza popup continui per singolo duplicato; riepilogo finale dettagliato con il numero di campioni integrati con nuovi test.
+      4. *Rappresentazione GUI*: Colonna visuale "Stato LIS" (`🟢 Inviato` / `🟠 Da Inviare`) nella griglia di dettaglio parametri, pre-spunta `[✓]` attiva solo sui parametri da inviare e facoltà per l'operatore di spuntare manualmente anche quelli inviati se desidera una rettifica.
+      5. *Stato Campione su Esportazione Parziale*: Il campione rimane `DA_ESPORTARE` finché restano parametri da inviare, passando a `ESPORTATO` solo quando tutti i parametri risultano trasmessi.
+    - Esteso `src/models.py`: aggiunti campi `is_exported: bool = False`, `exported_at: Optional[str] = None` in `ParsedResult` e `pending_results_count: int = 0` in `SampleRecord`.
+    - Aggiornato `src/database.py`:
+      - DDL e migrazione automatica retrocompatibile per aggiungere `is_exported` e `exported_at` alla tabella `sample_results`.
+      - Aggiornato `save_sample_with_results` con logica di merge parametro per parametro.
+      - Aggiunto metodo `mark_results_as_exported(result_ids, sample_ids, filename)` per aggiornare selettivamente i singoli test inviati e aggiornare lo stato del campione a `ESPORTATO` solo se non ha più test pendenti.
+      - Aggiornato `get_samples` per includere `pending_results_count`.
+    - Aggiornato `src/importer_service.py`: conteggio `merged_count` nel riepilogo `ImportBatchSummary` e merge automatico durante l'elaborazione dei campioni.
+    - Aggiornato `src/exporter.py`: passaggio dei soli `exported_result_ids` alla persistenza del database.
+    - Aggiornato `src/gui/master_detail.py`: visualizzazione della nuova colonna "Stato LIS", preselezione intelligente dei soli test non esportati e riepilogo import arricchito.
+    - Creata suite di test dedicata in `tests/test_duplicate_merge.py` e centralizzata la fixture `ctk_root` con scope di sessione in `tests/conftest.py`.
+    - Suite completa passata con successo (`34 passed in 2.88s`).
+  - *Documentazione dei Driver Implementati (`driver_implementati/`)*:
+    - Condotta sessione di intervista `/grill-me` per allineare formato, struttura e livello di dettaglio della documentazione.
+    - Creata cartella `driver_implementati/` con schede complete tecnico-operative e indice comparativo:
+      - `README.md`: panoramica comparativa degli strumenti, matrice delle caratteristiche e ciclo di vita del driver.
+      - `dionex_ic.md`: specifiche per Cromatografo Ionico Dionex/IC (anioni, delimitatore tab, gestione padding NUL 216 byte, estrazione codice campione e normalizzazione `n.a.` -> `0`).
+      - `mettler_toledo.md`: specifiche per Titolatore Mettler Toledo (file multi-campione `ListReport.csv`, separatore `;`, raggruppamento per ID e rimozione automatica unità di misura come `uS`).
+      - `spettrofotometro_uv_vis.md`: specifiche per Spettrofotometro UV-Vis/Assorbanza (delimitatori multipli, estrazione ID campione da nome file, normalizzazione fotometrica).
+  - *Manuale Utente (`manuale.md`) e Maschera Interattiva di Aiuto (`HelpDialog`)*:
+    - Condotta sessione `/grill-me` per allineare layout e requisiti: concordata una maschera modale con indice capitoli a sinistra (TOC) e visualizzatore formattato a destra con ricerca testuale rapida; collocazione del file `manuale.md` nella radice del progetto.
+    - Redatto il manuale operativo completo [manuale.md](file:///d:/pyprg/strumenti/manuale.md) strutturato in 10 capitoli: introduzione, strumenti e formati, interfaccia grafica, workflow operativo, guida pratica a selezione/deselezione (doppio clic, tasto Spazio, pulsanti globali e dedicati al campione, sincronizzazione `X/Y`), gestione duplicati e unione intelligente (Smart Merge), tabella legenda stati, formato tracciato LIS CSV a 24 colonne, funzioni amministrative (transcodifiche, driver, utenti, eliminazione esportati) e sezione FAQ.
+    - Sviluppata la classe `HelpDialog` in `src/gui/help_dialog.py` (`CTkToplevel`) con parsing automatico dei titoli H2 markdown, generazione dinamica dei pulsanti dell'indice laterale, salto immediato alla sezione con evidenziazione temporanea, motore di ricerca in tempo reale con conteggio delle occorrenze, navigazione e pulizia dei filtri, e gestione resiliente del fallback in caso di file assente.
+    - Integrato il pulsante `❓ Guida` nell'header di `MasterDetailView` (`src/gui/master_detail.py`) collocato accanto al pulsante password e reso accessibile a tutti gli utenti senza distinzione di ruolo (`OPERATORE` e `ADMIN`).
+    - Creata suite di test automatizzati `tests/test_help.py` (5 test) per verificare completezza dei capitoli, inizializzazione interfaccia, navigazione indice, ricerca testuale, fallback e visibilità del pulsante per entrambi i ruoli.
+    - *Formalizzazione Licenza GNU AGPLv3*:
+    - Scaricato e integrato il testo ufficiale della licenza GNU AGPLv3.0 nel file [LICENSE](file:///d:/pyprg/strumenti/LICENSE).
+    - Aggiornato [pyproject.toml](file:///d:/pyprg/strumenti/pyproject.toml) con `license = { file = "LICENSE" }`, classifiers standard OSI per AGPLv3+, e configurato `[dependency-groups]` per uv in modo che `uv sync` mantenga sincronizzato sia l'ambiente di runtime che di test.
+    - Aggiunto l'header SPDX `# SPDX-License-Identifier: AGPL-3.0-or-later` e nota di copyright in testa a tutti i 18 moduli sorgente Python del progetto.
+    - Aggiornate le specifiche di progetto [progetto.md](file:///d:/pyprg/strumenti/progetto.md) e il manuale utente [manuale.md](file:///d:/pyprg/strumenti/manuale.md).
+    - Eseguita la suite completa di 45 test con `uv run pytest`, confermando l'integrità del software al 100%.
+
+## Issues and Solutions
+- **2026-10-05 — GitHub CLI e proprietà Git**: `gh` non è installata; creazione repository effettuata via browser con la skill computer-use. La prima inizializzazione Git nella sandbox ha creato metadati con proprietà dell'utente sandbox, causando `dubious ownership`. Conservata la sola directory iniziale dei metadati in `.git-sandbox-backup/` (ignorata) e ricreato Git con l'utente Windows reale tramite esecuzione autorizzata, senza cambiare configurazioni globali o cancellare file del progetto.
+- **2026-10-05 — Manuale allineato**: Risolta la discrepanza sul valore dei risultati già esportati dopo il merge e sostituito lo schema CSV documentato con le intestazioni effettive. Precisato che l'applicazione genera il file e non verifica la ricezione del LIS; documentato il controllo del dettaglio prima dell'esportazione per gestire la selezione dei test con il comportamento attuale. I punti funzionali restano da verificare separatamente; nessuna modifica al codice.
+- **2026-10-05 — Ambiente di test**: La prima esecuzione nella sandbox ha superato 32 test e prodotto 13 errori nella fixture GUI (`Can't find a usable init.tcl`), oltre a warning per accesso negato alla cache pytest. La ripetizione autorizzata fuori dalla sandbox, con cache pytest disabilitata, ha superato tutti i 45 test. Non è stato necessario modificare Python o Tcl/Tk.
+- **2026-10-05 — Discrepanze documentali e punti aperti**: Rilevata divergenza tra manuale e codice/test sul valore dei parametri già esportati dopo un merge; rilevati riferimenti a `transer.md` inesistente e conteggio test obsoleto nella guida di trasferimento. Corretto il riferimento in `PROJECT_CONTEXT.md` e registrati gli altri allineamenti come TODO. Segnalato anche il richiamo a `show_login()` nell'aggiornamento del titolo finestra, da verificare durante una sessione autenticata. Nessuna correzione funzionale applicata, dato che la richiesta riguarda la comprensione del progetto.
+- **Issue**: `UnicodeEncodeError: 'charmap' codec can't encode characters` durante la stampa dei caratteri grafici del banner ANSI su Windows console con codifica legacy cp1252.
+- **Solution**: Aggiunta la riconfigurazione automatica di `sys.stdout` e `sys.stderr` in UTF-8 all'avvio con fallback grafico ASCII in caso di console restrittive.
+- **Issue**: `sqlite3.DatabaseError: database disk image is malformed` durante l'esecuzione di test multipli consecutivi con database SQLite in modalità WAL su Windows, causato da connessioni non chiuse esplicitamente da `with conn:`.
+- **Solution**: Convertito `Database.get_connection()` in un context manager `@contextmanager` con blocco `try-finally` che garantisce la chiusura deterministica `conn.close()` e il commit automatico di ogni transazione.
+- **Issue**: File esportati dallo strumento con padding di byte nulli (`0x00`) fino a 216 byte interpretati come UTF-16 LE da Blocco Note Windows 11 con caratteri strani e potenziale inserimento di byte nulli nel database/parsing.
+- **Solution**: Inserita la rimozione automatica dei byte `\x00` in `BaseInstrumentDriver._read_text_file`, sanificando le stringhe prima di qualunque operazione di parsing e validazione.
+- **Issue**: Errore `_tkinter.TclError: couldn't read file "scale.tcl"` o `invalid command name "tcl_findLibrary"` durante l'esecuzione dell'intera suite di test pytest su Windows, causato dalla distruzione e ricreazione multipla dell'interprete Tcl/Tk (`root.destroy()`) in moduli di test consecutivi.
+- **Solution**: Centralizzata la fixture `ctk_root` in `tests/conftest.py` con `@pytest.fixture(scope="session")`, eliminando le istanziazioni multiple per-modulo e garantendo stabilità assoluta all'interprete Tcl su Windows.
+- **Issue**: Nel test di esportazione, se un campione ha una lista vuota di parametri `s.results = []`, la condizione `if s.results` in `LISExporter.export_samples` falliva e ricaricava tutti i parametri dal DB sovrascrivendo l'esclusione.
+- **Solution**: Sostituita la condizione con `if s.results is not None: results = s.results`, garantendo che una lista vuota o parziale esplicitamente passata venga rispettata e che campioni con 0 parametri vengano ignorati senza generare righe nel CSV.
+- **Issue**: `sqlite3.OperationalError: no such column: is_exported` durante l'esecuzione di `init_db()` su database SQLite preesistenti privi della colonna `is_exported`, dovuto alla creazione dell'indice `idx_results_is_exported` prima dell'esecuzione delle istruzioni `ALTER TABLE`.
+- **Solution**: Anticipata la verifica `PRAGMA table_info` e la migrazione delle colonne `is_exported` ed `exported_at` prima della dichiarazione `CREATE INDEX`, consentendo una migrazione fluida e trasparente dei database esistenti.
+- **Issue**: Il test `test_settings_dialog_version_save_and_propagation` in `tests/test_version_config.py` si bloccava in attesa interattiva su Windows a causa dell'apertura del pop-up modale `tkinter.messagebox.showinfo`.
+- **Solution**: Applicato `monkeypatch` su `tkinter.messagebox.showinfo` e `tkinter.messagebox.showwarning` nei test interessati, consentendo un'esecuzione automatizzata non bloccante.
+
+
+
+
