@@ -1,5 +1,25 @@
 # SESSION SUMMARY
 
+## Aggiornamento transfer.md — 2026-10-06
+### Decisions and Activities
+- Revisionato integralmente [transfer.md](file:///d:/pyprg/strumenti/transfer.md) per guidare il trasferimento del software su postazioni Windows prive di Python.
+- Riorganizzata la tassonomia di "Cosa copiare e cosa NON copiare" in una tabella sinottica rapida e in sezioni dettagliate categorizzate con motivazioni tecniche e rischi operativi associati (corruzione database, re-importazioni di sequenze duplicate, re-invio file LIS, rottura ambienti virtuali).
+- Inclusi i nuovi componenti del repository: `sync.bat` per Git/GitHub, la cartella `driver_implementati/`, `manuale.md`, `README.md`, `LICENSE`, `agents.md`, `.gitignore` e `.gitattributes`.
+- Rimosso il riferimento circolare errato `transer.md` e sostituiti i riferimenti con link diretti ai documenti del progetto.
+- Aggiornato il numero di test eseguiti nella procedura di collaudo con `uv run pytest` da 18 a 45 (stato attuale della suite di test).
+- Registrato lo scenario sia per trasferimento manuale (USB/ZIP) sia per clonazione diretta tramite Git (`git clone`).
+### Issues and Solutions
+- Nel documento originale era presente un link non funzionante a `transer.md` e il conteggio dei test era fermo alle prime versioni (18 anziché 45). Corretti entrambi e allineata la documentazione allo stato effettivo del repository.
+
+## Authentication review — 2026-10-05
+### Decisions and Activities
+- Analizzati entry point, schema/CRUD utenti, hashing, sessione, login/logout, cambio/reset password, permessi GUI e documentazione (`progetto.md`, `manuale.md`, `README.md`). Nessuna modifica al codice applicativo e nessun accesso al database operativo.
+- Aggiornato `PROJECT_CONTEXT.md` con il flusso di autenticazione effettivo, la separazione dall'autenticazione GitHub e i limiti rilevati.
+- Verifica: `uv --offline --no-cache run --no-sync pytest -q -p no:cacheprovider tests/test_database.py --basetemp=.pytest-auth-review --tb=short`: **5 passed**. I test verificano database/seed e manutenzione con controllo ruoli; non costituiscono un audit completo del login GUI.
+### Issues and Solutions
+- Il connettore GitHub ha restituito 404 per il repository privato configurato nel remote; la ricerca `SessionManager` non ha restituito risultati. Analisi basata sul checkout locale al commit `cdd1e2c`, senza verificare l'allineamento remoto.
+- Rilevati SHA-256 singolo, bootstrap con credenziale pubblica, controlli ruoli prevalentemente GUI, assenza di scadenza/revoca sessione e validazione password non uniforme. Registrati come aspetti da valutare, senza applicare cambiamenti funzionali fuori dallo scopo della richiesta.
+
 ## Decisions and Activities
 - **2026-10-05 — Caricamento iniziale completato**: Pubblicati 54 file su `origin/main` nel repository privato `AmboniRider/strumentiLysa` (commit iniziale `60a41d2`). Ambiente virtuale, database, file operativi e cache esclusi; la cartella esistente resta la copia di lavoro collegata a GitHub.
 - **2026-10-05 — Repository GitHub privato e sincronizzazione**: Creato `AmboniRider/strumentiLysa` tramite la sessione GitHub già autenticata, con visibilità Private verificata. Inizializzato Git sul ramo `main` e configurato `origin`. Aggiunti `.gitignore` per escludere ambiente, cache, credenziali e dati operativi, `.gitattributes` per i terminatori dei testi, `README.md` con istruzioni di clone/avvio e `sync.bat` con commit automatico, fetch, merge e push. Verificati elenco dei file da caricare, esclusioni e modalità `--check`.

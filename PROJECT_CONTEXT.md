@@ -1,5 +1,13 @@
 # PROJECT CONTEXT
 
+## Authentication Architecture — verifica del 2026-10-05
+- Login desktop locale: `LoginView` cerca l'utente su SQLite, verifica la password e passa il `UserRecord` alla dashboard; nessun endpoint HTTP o provider OAuth nel codice applicativo esaminato.
+- `src/auth.py` genera salt casuali di 16 byte e calcola SHA-256 di `salt:password`, verificato tramite `secrets.compare_digest`. Hash e salt sono memorizzati in `users` nel database locale `data/strumenti.db`.
+- `SessionManager` conserva il record utente solo in memoria; logout azzera il riferimento. Non sono implementati token di accesso/refresh, cookie, scadenza della sessione o revoca automatica al reset password/cambio ruolo.
+- Permessi `ADMIN`/`OPERATORE`: pulsanti e dialogo impostazioni protetti nella GUI; eliminazione campioni esportati protetta anche nel database. I metodi CRUD utenti non verificano autonomamente il ruolo del chiamante.
+- Autenticazione GitHub separata: `sync.bat` delega a Git e al metodo di autenticazione configurato sulla postazione; non gestisce token applicativi o segreti propri. Database e file di credenziali comuni sono esclusi da Git.
+- **TODO da valutare**: sostituire SHA-256 singolo con una funzione dedicata alle password; rimuovere il bootstrap con credenziale predefinita pubblica; uniformare validazione password e gestione spazi; centralizzare i permessi e l'aggiornamento/revoca delle sessioni; impedire anche la declassazione dell'ultimo amministratore.
+
 ## Project Goal
 Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cromatografo Ionico Dionex / IC e futuri strumenti) e il LIS (Laboratory Information System). Il software acquisisce file di testo generati dagli strumenti, normalizza e transcodifica i parametri, li persiste su SQLite locale e consente all'operatore di selezionare ed esportare i campioni nel tracciato CSV standard richiesto dal LIS.
 
@@ -19,7 +27,7 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - `sync.bat`: Sincronizzazione Git bidirezionale con commit locale automatico, fetch, merge e push; `--check` verifica i prerequisiti senza modifiche o rete.
 - `.gitignore` / `.gitattributes`: Esclusione di ambienti, cache e dati operativi; normalizzazione dei testi e terminatori CRLF per i batch.
 - `README.md`: Installazione da GitHub, avvio e istruzioni di sincronizzazione.
-- `transfer.md`: Guida al trasferimento e installazione su PC privi di ambiente Python.
+- [transfer.md](file:///d:/pyprg/strumenti/transfer.md): Guida al trasferimento e installazione su PC privi di ambiente Python (dettaglio file da copiare e da escludere).
 - [manuale.md](file:///d:/pyprg/strumenti/manuale.md): Manuale d'uso completo per operatori e amministratori di laboratorio (workflow, selezione campioni/test, duplicati smart merge, esportazione LIS e FAQ).
 - `src/`:
   - `models.py`: Dataclass condivise per campioni, risultati, utenti, transcodifiche e filtri; contratto dati fra driver, servizi, database e GUI.
