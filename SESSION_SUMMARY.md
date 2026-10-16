@@ -15,6 +15,10 @@
   automatica: richiede approvazione esplicita per tutte le 32 modifiche locali
   e la pubblicazione diretta su `main`. Nessun commit o push eseguito;
   richiesta conferma dell'ambito, senza tentare percorsi alternativi.
+- Successivamente l'utente ha confermato esplicitamente l'intero ambito e il
+  push diretto su `main`. `sync.bat` completato: commit `6f666a0`, fetch senza
+  novità da integrare e push riuscito su `AmboniRider/strumentiLysa`.
+  Git ha riconosciuto la rinomina del CSV, registrando 31 file nel commit.
 
 ## Incremento versione 1.1 — 2026-10-16
 ### Decisions and Activities
