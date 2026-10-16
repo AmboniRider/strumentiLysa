@@ -10,6 +10,7 @@ Ciascuna guida è redatta per essere facilmente comprensibile sia dagli operator
 
 | Strumento | Nome nel Sistema | Formato File | Separatore | Modalità Campione | Unità di Misura nel Risultato | Normalizzazione Eseguita | Guida Dettagliata |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Agilent 5977C** | `Agilent 5977C` | CSV, nome libero | Virgola (`,`) | Multi-campione, controlli ignorati | Non presenti | Prima occorrenza valida, suffisso Results rimosso, non numerici a 0, virgola decimale | [agilent_5977c.md](agilent_5977c.md) |
 | **Cromatografo Ionico Dionex** | `Cromatografo Ionico (Dionex / IC)` | `.txt` | Tabulazione (`\t`) | Singolo Campione | Non presenti (valore o `n.a.`) | `n.a.` -> `0`, virgola decimale, rimozione byte nulli NUL | [dionex_ic.md](file:///d:/pyprg/strumenti/driver_implementati/dionex_ic.md) |
 | **Titolatore / Analizzatore Mettler Toledo** | `Mettler Toledo` | `ListReport.csv` | Punto e virgola (`;`) | Multi-Campione (N campioni) | Presenti (es. `uS`) | Rimozione unità di misura (es. `293,370 uS` -> `293,370`), virgola decimale, raggruppamento per ID | [mettler_toledo.md](file:///d:/pyprg/strumenti/driver_implementati/mettler_toledo.md) |
 | **Spettrofotometro UV-Vis** | `Spettrofotometro (UV-Vis / Assorbanza)` | `.txt`, `.csv` | Tabulazione (`\t`), `;`, `,` | Singolo Campione | Non presenti (valori numerici) | Estrazione coppie chiave/valore o tabulari, virgola decimale | [spettrofotometro_uv_vis.md](file:///d:/pyprg/strumenti/driver_implementati/spettrofotometro_uv_vis.md) |
@@ -19,6 +20,11 @@ Ciascuna guida è redatta per essere facilmente comprensibile sia dagli operator
 ## 🛠️ Architettura e Ciclo di Vita del Driver
 
 Tutti i driver implementano l'interfaccia astratta [`BaseInstrumentDriver`](file:///d:/pyprg/strumenti/driver.py#L19-L96) definita nel modulo [`driver.py`](file:///d:/pyprg/strumenti/driver.py).
+
+Il servizio usa `parse_batch`, che restituisce campioni e segnalazioni prima di
+salvare dati. Per i driver preesistenti un adattatore richiama `parse_samples`;
+Agilent usa anche i prefissi configurati e distingue i file validi di soli
+controlli dai file senza campioni utilizzabili per errori nelle colonne.
 
 ```
                       File di Sequenza nella cartella di ingresso

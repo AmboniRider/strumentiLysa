@@ -28,7 +28,7 @@ DEFAULT_PATHS = {
 
 DEFAULT_LAB_CODES = "BG,MI,BS,RL,VP,MN,MB"
 DEFAULT_DRIVER_NAME = "Cromatografo Ionico (Dionex / IC)"
-DEFAULT_APP_VERSION = "1.0"
+DEFAULT_APP_VERSION = "1.1"
 
 # Transcodifiche iniziali di default
 DEFAULT_TRANSCODINGS: Dict[str, str] = {

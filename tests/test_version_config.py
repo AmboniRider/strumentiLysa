@@ -1,6 +1,6 @@
 """Test per la gestione, visualizzazione e configurazione della versione software.
 
-Verifica che la versione predefinita sia '1.0', che venga visualizzata correttamente
+Verifica che la versione predefinita sia '1.1', che venga visualizzata correttamente
 nel titolo della finestra principale e nella testata interna, e che l'Amministratore
 possa aggiornarla dinamicamente dal pannello Impostazioni.
 """
@@ -38,11 +38,11 @@ def admin_user() -> UserRecord:
 
 
 def test_default_app_version_in_config_and_db(test_db: Database):
-    """Verifica che la versione di default sia '1.0' sia in AppConfig che nel database SQLite."""
+    """Verifica che la versione di default sia '1.1' sia in AppConfig che nel database SQLite."""
     # 1. Config iniziale
     config = test_db.get_config()
     assert config.app_version == DEFAULT_APP_VERSION
-    assert config.app_version == "1.0"
+    assert config.app_version == "1.1"
 
     # 2. Controllo valore memorizzato nella tabella configurations
     with test_db.get_connection() as conn:
@@ -50,7 +50,7 @@ def test_default_app_version_in_config_and_db(test_db: Database):
         cursor.execute("SELECT value FROM configurations WHERE key = 'app_version'")
         row = cursor.fetchone()
         assert row is not None
-        assert row["value"] == "1.0"
+        assert row["value"] == "1.1"
 
 
 def test_update_app_version_persistence(test_db: Database):
@@ -72,8 +72,8 @@ def test_app_window_title_with_version(test_db: Database, ctk_root: ctk.CTk):
     try:
         app = AppWindow(test_db)
         title = app.title()
-        assert "Versione 1.0" in title
-        assert "Interfaccia Strumenti di Laboratorio - LIS - Versione 1.0" == title
+        assert "Versione 1.1" in title
+        assert "Interfaccia Strumenti di Laboratorio - LIS - Versione 1.1" == title
 
         # Modifica versione nel database e chiama update_app_title
         test_db.save_config_value("app_version", "2.1")
@@ -99,7 +99,7 @@ def test_master_detail_brand_label_with_version(test_db: Database, admin_user: U
         )
 
         assert hasattr(view, "lbl_brand")
-        assert "v1.0" in view.lbl_brand.cget("text")
+        assert "v1.1" in view.lbl_brand.cget("text")
 
         # Simula cambio versione e aggiornamento vista
         test_db.save_config_value("app_version", "1.2")
@@ -128,9 +128,9 @@ def test_settings_dialog_version_save_and_propagation(test_db: Database, admin_u
 
         dlg = SettingsDialog(ctk_root, test_db, on_config_changed=on_change)
 
-        # Verifica presenza del campo versione precompilato con '1.0'
+        # Verifica presenza del campo versione precompilato con '1.1'
         assert hasattr(dlg, "entry_version")
-        assert dlg.entry_version.get() == "1.0"
+        assert dlg.entry_version.get() == "1.1"
 
         # Modifica la versione a '3.0.0-PROD'
         dlg.entry_version.delete(0, "end")
@@ -171,8 +171,8 @@ def test_settings_dialog_rejects_empty_version(test_db: Database, admin_user: Us
         dlg.entry_version.insert(0, "   ")
         dlg._save_version()
 
-        # Il valore nel DB deve rimanere invariato ('1.0')
-        assert test_db.get_config().app_version == "1.0"
+        # Il valore nel DB deve rimanere invariato ('1.1')
+        assert test_db.get_config().app_version == "1.1"
 
         dlg.destroy()
     finally:

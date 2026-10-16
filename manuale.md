@@ -53,7 +53,16 @@ Il software è dotato di un'architettura modulare a driver capace di interpretar
 - **Formato file**: File tabellari `.txt` o `.csv` delimitati da tabulazioni, virgole o punti e virgola.
 - **Struttura**: Identificativo campione ricavato dal nome file senza estensione, che deve quindi essere un codice valido a 18 caratteri; acquisizione delle coppie parametro/valore.
 
-### 2.4 Percorsi di Lavoro (Cartelle)
+### 2.4 Agilent 5977C
+- **Formato file**: CSV con separatore virgola, decimali con punto e campi fra virgolette quando contengono virgole. Il nome del file è libero; numero e ordine degli esami possono variare.
+- **Struttura**: Prima riga con `Sample` e nomi degli esami (es. `benzene Results`); seconda riga ignorata; dalla terza riga, un campione o controllo per riga. Il suffisso finale `Results` viene rimosso dai nomi usati nelle transcodifiche.
+- **Campioni**: Solo codici conformi al validatore e ai prefissi laboratorio abilitati. Bianchi, controlli e altri codici non conformi vengono ignorati. In caso di ripetizioni nel file si conserva la prima riga utilizzabile, senza medie. I campioni già nel database seguono il merge ordinario.
+- **Risultati**: Celle vuote o non numeriche diventano `0`; i valori numerici conservano le cifre decimali, con virgola nel LIS. Configurare le associazioni esame ed eventuale sostanza tramite le transcodifiche esistenti.
+- **Anomalie**: Una riga campione con colonne mancanti o aggiuntive viene scartata e segnalata nel riepilogo, importando le altre righe regolari. Nomi esame duplicati o vuoti, seconda riga mancante e CSV illeggibile bloccano l'intero file prima di qualsiasi salvataggio.
+- **Soli controlli**: Il file viene archiviato con un messaggio informativo e zero campioni importati. Se invece tutti i campioni sono scartati per colonne errate, il file va in `errori`.
+- Dettagli e collaudo: [Scheda Agilent 5977C](driver_implementati/agilent_5977c.md).
+
+### 2.5 Percorsi di Lavoro (Cartelle)
 - `sequenze/` (Input): Cartella predefinita in cui gli strumenti o gli operatori depositano i file da acquisire. La scansione considera i file `.txt`, `.csv` e `.dat` direttamente nella cartella, senza cercare nelle sottocartelle.
 - `archiviati/` (Archivio): I file elaborati vengono spostati qui automaticamente. Il nome originale viene mantenuto; se esiste già un file omonimo viene aggiunto un timestamp.
 - `errori/` (Scarti): Destinazione dei file per cui il parsing fallisce o nessun campione viene elaborato con successo. Per un file multi-campione con esiti misti, il file viene archiviato se almeno un campione è elaborato con successo; gli errori degli altri campioni sono riportati nel riepilogo.
@@ -99,6 +108,7 @@ All'avvio comparirà la maschera di autenticazione:
   - Nuovi campioni registrati.
   - Campioni integrati con nuovi test (Merge intelligente).
   - Eventuali duplicati o parametri non ancora mappati.
+  - Righe Agilent scartate, con nome file e numero riga, e messaggi sui file archiviati senza campioni. Questi messaggi non incrementano i campioni importati o saltati.
 - I file elaborati vengono spostati in automatico nella cartella `archiviati/`.
 
 ### Passo 3 — Revisione dei Dati
@@ -107,9 +117,9 @@ All'avvio comparirà la maschera di autenticazione:
 - Verificare che i parametri presentino lo stato di transcodifica `✅ Valido`.
 
 ### Passo 4 — Selezione ed Esportazione verso il LIS
-- Al caricamento dell'elenco, i campioni visibili sono selezionati. Aprendo il dettaglio di un campione vengono preselezionati i suoi test pendenti.
+- Al caricamento dell'elenco vengono preselezionati i soli test pendenti di tutti i campioni visibili, anche senza aprirne il dettaglio. I campioni senza test selezionati restano deselezionati.
 - Selezionare o deselezionare i campioni desiderati (vedi capitolo successivo).
-- Prima di esportare, aprire il dettaglio di ciascun campione selezionato e controllare le spunte, soprattutto se contiene risultati già esportati. Per i campioni di cui non è stato aperto il dettaglio, l'esportazione può includere tutti i parametri.
+- Per un invio parziale, aprire il dettaglio dei campioni interessati e lasciare spuntati solo gli esami desiderati. Il CSV include esclusivamente i test spuntati dei campioni selezionati; i campioni con zero test selezionati vengono esclusi.
 - Cliccare su `📤 Esporta Selezionati per LIS` in basso a destra: la generazione parte direttamente e al termine viene mostrato l'esito.
 - Il software genera il CSV nella cartella di esportazione configurata e marca come esportati i singoli parametri inclusi. Il campione passa a `🟢 Esportato` solo quando tutti i suoi parametri risultano esportati; altrimenti resta `🟠 Da Esportare`.
 - Il CSV deve essere acquisito dal LIS secondo la procedura del laboratorio. L'applicazione non riceve una conferma di acquisizione dal LIS.
@@ -125,17 +135,18 @@ Il software offre un controllo granulare su ciò che viene trasmesso al LIS, sia
 - **Doppio Clic con il Mouse**: Facendo doppio clic su una riga di campione si attiva o disattiva la spunta.
 - **Tasto Spazio**: Selezionando una riga con le frecce della tastiera e premendo la **barra spaziatrice**, la spunta viene invertita istantaneamente.
 - **Pulsanti Rapidi di Gruppo**:
-  - `☑️ Seleziona Tutti`: Seleziona istantaneamente tutti i campioni visibili nella tabella.
+  - `☑️ Seleziona Tutti`: Seleziona tutti i campioni visibili, conservando i sottoinsiemi di test già scelti. Se un campione ha zero test selezionati, ne riattiva tutti i test, anche quelli già inviati; lo stesso avviene riselezionando singolarmente quel campione.
   - `⬜ Deseleziona Tutti`: Deseleziona tutti i campioni.
 - **Sincronizzazione Automatica**: Se un campione ha 0 test selezionati nel pannello inferiore, la sua casella nella tabella superiore si deseleziona automaticamente. Se si riattiva almeno un test, il campione si riseleziona.
 
 ### 5.2 Selezione dei Parametri (Tabella Inferiore - Detail)
-- **Invio Parziale dei Risultati**: Se per un campione sono pronti 4 parametri ma un quinto deve essere ripetuto o verificato, è possibile escludere solo quel singolo test!
+- **Invio Parziale dei Risultati Standard**: Se per un campione sono pronti 4 parametri standard ma un quinto deve essere ripetuto o verificato, è possibile escludere solo quel singolo test. Gli esami con sostanze vengono invece esportati soltanto completi, come descritto nel capitolo 8.
 - **Doppio Clic o Tasto Spazio**: Facendo doppio clic sulla riga del test o premendo la barra spaziatrice, la spunta `[✓]` viene attivata o disattivata per quel solo parametro.
 - **Pulsanti Rapidi per il Campione**:
   - `Seleziona Tutti`: Seleziona tutti i parametri del campione visualizzato, inclusi quelli già esportati; usarlo quando si intende includere anche questi ultimi nel CSV.
   - `Deseleziona`: Deseleziona tutti i parametri del campione visualizzato.
 - **Colonna "N. Parametri"**: Nella tabella superiore compare il conteggio dinamico in formato `X/Y` (es. `3/4` indica che 3 parametri su 4 sono selezionati per l'invio).
+- **Selezioni indipendenti**: Ogni campione conserva il proprio insieme di test spuntati passando da un dettaglio all'altro. Cambiare i filtri conserva le selezioni dei campioni ancora visibili e non aggiunge test a un insieme già preparato. Il pulsante di aggiornamento dell'elenco e una nuova importazione ripristinano invece la preselezione dei test pendenti.
 
 ---
 
@@ -154,7 +165,7 @@ Invece di bloccare l'acquisizione o sovrascrivere distruttivamente i dati:
    - **Parametri Già Esportati al LIS**: Il valore viene aggiornato alla nuova misura, mentre il timestamp dell'ultima esportazione e lo stato `🟢 Inviato` vengono conservati. La modifica del valore non riapre automaticamente il test per una nuova esportazione.
    - **Parametri assenti nel nuovo file**: Rimangono nel campione con i dati e lo stato già registrati.
 3. **Selezione dei Risultati da Esportare**:
-   - Alla prima apertura del dettaglio del campione, i test già contrassegnati come `🟢 Inviato` sono deselezionati (`[ ]`) e quelli pendenti sono selezionati.
+   - Al caricamento dell'elenco, per tutti i campioni i test già contrassegnati come `🟢 Inviato` sono deselezionati (`[ ]`) e quelli pendenti sono selezionati. Aprire un dettaglio non modifica le spunte.
    - Controllare il dettaglio di ogni campione prima dell'esportazione: i comandi di selezione di tutti i test possono includere anche risultati già esportati.
    - *Nota*: Se l'operatore intende volontariamente inviare una rettifica di un test già inviato, può riattivare manualmente la spunta `[✓]`.
 4. **Ripristino dello Stato del Campione**:
@@ -206,22 +217,52 @@ L'esportazione verso il LIS genera un file con nome `ESPORTAZIONE_YYYYMMDD_HHMMS
 | 6 | `UNITÀ CAMPIONARIA` | Vuoto. |
 | 7 | `N. RISULTATO` | Vuoto. |
 | 8 | `SEGNO` | Vuoto. |
-| 9 | `VALORE` | Valore formattato dal driver, con virgola decimale. |
+| 9 | `VALORE` | Valore formattato dal driver per gli standard; vuoto nelle righe con sostanza. |
 | 10 | `RISULTATO` | Vuoto. |
 | 11 | `TIPO ESAME` | Codice esame LIS; in assenza di transcodifica, nome del parametro. |
 | 12 | `ESITO` | Vuoto. |
 | 13 | `UNITÀ BGSURA` | Vuoto; questa è l'intestazione attualmente generata. |
 | 14 | `DATA INIZIO` | Vuoto. |
 | 15 | `DATA FINE` | Vuoto. |
-| 16 | `SOSTANZA` | Vuoto. |
+| 16 | `SOSTANZA` | Codice sostanza LIS configurato per il parametro; vuoto per gli standard. |
 | 17 | `RISULTATO SOSTANZA` | Vuoto. |
-| 18 | `VALORE SOSTANZA` | Vuoto. |
+| 18 | `VALORE SOSTANZA` | Valore formattato dal driver nelle righe con sostanza; vuoto per gli standard. |
 | 19 | `SEGNO SOSTANZA` | Vuoto. |
 | 20 | `INCERTEZZA SOSTANZA` | Vuoto. |
 | 21 | `GERME` | Vuoto. |
 | 22 | `RILEVATO GERME` | Vuoto. |
 | 23 | `VALORE GERME` | Vuoto. |
 | 24 | `CODICE CAMPIONE` | Codice completo a 18 caratteri. |
+
+### Esami con più Esiti (Sostanze)
+
+Ogni sostanza ha un nome parametro distinto nel file strumentale. L'Amministratore
+associa quel nome a un **Codice Esame LIS** e a un **Codice sostanza LIS** facoltativo.
+Più parametri possono condividere lo stesso codice esame con codici sostanza diversi.
+Il codice sostanza viene inserito nella colonna `SOSTANZA`, il risultato in
+`VALORE SOSTANZA`; `TIPO ESAME` conserva il codice esame e `VALORE` resta vuoto.
+Le colonne `ESITO` e `RISULTATO SOSTANZA` restano vuote. Separatore, intestazioni e
+normalizzazione numerica sono gli stessi degli esami standard.
+
+**Prima di usare un esame con sostanze, configurare tutte le sue sostanze richieste.**
+L'elenco delle transcodifiche attive di quell'esame costituisce il catalogo obbligatorio.
+La selezione resta individuale: per inviare l'esame devono essere presenti e selezionate
+tutte le sostanze del catalogo corrente, con un solo risultato per ciascun codice.
+Se manca una sostanza, una spunta è disattivata, un codice è duplicato o è fuori
+catalogo, viene saltato l'intero esame. Gli altri esami completi e gli standard vengono
+comunque esportati. Se l'esame è interamente deselezionato, non viene richiesto alcun invio.
+
+Il riepilogo identifica campione, esame e sostanze mancanti/non selezionate o altri
+motivi di esclusione. Le esclusioni sono registrate nell'audit; soltanto le righe
+effettivamente scritte nel CSV aggiornano gli stati di invio e i conteggi.
+Se non rimane alcun risultato esportabile, non viene creato il CSV.
+
+I codici esame e sostanza sono salvati all'importazione: modificare le regole non
+rimappa i risultati già acquisiti. Per aggiornarli occorre reimportare il file originale.
+La verifica di completezza usa comunque il catalogo attivo corrente: dopo una modifica
+controllare i codici nel dettaglio e riallineare i risultati prima dell'invio.
+Una nuova misura di una sostanza già inviata mantiene stato e timestamp precedenti.
+Per una rettifica, selezionare manualmente tutte le sostanze dell'esame e riesportarlo.
 
 ---
 
@@ -232,8 +273,9 @@ Gli utenti con ruolo `ADMIN` hanno accesso al pannello `⚙️ Impostazioni` con
 ### 9.1 Transcodifiche LIS
 - Permette di mappare i nomi dei parametri restituiti dagli strumenti (es. `Cloruri`) nel rispettivo codice atteso dal LIS (es. `CL_IC`).
 - **Aggiunta e Modifica**: Possibilità di aggiungere nuove regole o modificare quelle esistenti tramite doppio clic sulla riga o con il pulsante `✏️ Modifica Regola`.
+- **Codice sostanza LIS**: Facoltativo per gli standard, necessario per ogni sostanza di un esame con più esiti. Accetta lettere e cifre, conserva maiuscole/minuscole e zeri iniziali e rimuove solo gli spazi esterni. Una coppia esame/sostanza può essere usata da una sola regola attiva.
 - **Ordinamento**: Cliccando sull'intestazione di qualsiasi colonna è possibile ordinare alfabeticamente o per ID (▲/▼).
-- **Import/Export**: Funzioni per caricare o salvare un file di backup `transcodifica.txt`.
+- **Import/Export**: Il backup `transcodifica.txt` usa `Parametro:CodiceLIS` per gli standard e `Parametro:CodiceLIS:CodiceSostanza` per le sostanze. Una riga a due campi rende standard anche una regola già esistente con sostanza. Righe vuote e commenti con `#` vengono ignorati; errori e duplicati annullano l'intera importazione senza modifiche parziali.
 
 ### 9.2 Driver Strumento Predefinito
 - Permette di impostare quale driver utilizzare in via preferenziale tra quelli registrati (`Dionex IC`, `Mettler Toledo`, `Spettrofotometro UV-Vis`).

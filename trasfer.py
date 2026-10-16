@@ -8,6 +8,7 @@ deve inizializzare il database operativo né importare l'applicazione principale
 from __future__ import annotations
 
 import os
+from contextlib import closing
 from pathlib import Path
 import queue
 import sqlite3
@@ -26,7 +27,7 @@ UV_VERSION = "0.12.14"
 PYTHON_VERSION = "3.12.13"
 # Un elenco positivo evita di esportare nuovi file riservati aggiunti al progetto.
 RUNTIME_FILES = (
-    "app.py", "driver.py", "pyproject.toml", "uv.lock", "LICENSE",
+    "app.py", "driver.py", "pyproject.toml", "uv.lock", "LICENSE", "strumenti.ico",
     "manuale.md", "progetto.md", "transfer.md",
     "src/__init__.py", "src/auth.py", "src/config.py", "src/database.py",
     "src/exporter.py", "src/importer_service.py", "src/models.py", "src/validator.py",
@@ -35,6 +36,7 @@ RUNTIME_FILES = (
     "src/gui/settings_dialog.py", "src/gui/theme.py",
     "driver_implementati/README.md", "driver_implementati/dionex_ic.md",
     "driver_implementati/mettler_toledo.md", "driver_implementati/spettrofotometro_uv_vis.md",
+    "driver_implementati/agilent_5977c.md",
 )
 PATH_KEYS = ("path_input", "path_archive", "path_error", "path_export")
 ProgressCallback = Callable[[int, str], None]
@@ -66,6 +68,7 @@ chcp 65001 > nul
 pushd "%~dp0"
 if errorlevel 1 exit /b 1
 set "UV_PROJECT_ENVIRONMENT=%~dp0.venv"
+set "VIRTUAL_ENV="
 set "UV_PYTHON_INSTALL_DIR=%~dp0.runtime\python"
 set "UV_CACHE_DIR=%~dp0.uv-cache"
 set "UV_PYTHON_INSTALL_BIN=0"
@@ -87,7 +90,9 @@ goto failed
 set "UV_UNMANAGED_INSTALL=%~dp0.tools"
 if exist ".tools\uv.exe" goto sync
 echo Download di uv {UV_VERSION}. E' necessaria una connessione Internet.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; irm https://astral.sh/uv/{UV_VERSION}/install.ps1 | iex"
+rem Usa i moduli Windows: evita conflitti con PSModulePath ereditato da PowerShell 7.
+set "PSModulePath=%SystemRoot%\System32\WindowsPowerShell\v1.0\Modules"
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; irm https://astral.sh/uv/{UV_VERSION}/install.ps1 | iex"
 if errorlevel 1 goto failed
 if not exist ".tools\uv.exe" goto failed
 :sync
@@ -151,7 +156,7 @@ def sanitized_database(source: Path, target: Path) -> None:
 
     try:
         # mode=ro impedisce la creazione o la modifica dei record sul sorgente.
-        with sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True) as original:
+        with closing(sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True)) as original:
             copied = sqlite3.connect(target)
             try:
                 original.backup(copied, pages=128, progress=check_timeout, sleep=0.1)

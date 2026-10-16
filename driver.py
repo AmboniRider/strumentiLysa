@@ -6,18 +6,22 @@
 
 Questo modulo isola interamente la logica di lettura, parsing e conversione
 dei file generati dagli strumenti di laboratorio nel formato standard dell'applicazione.
-L'aggiunta di nuovi strumenti analitici richiede unicamente l'estensione o la modifica
-di questo file.
+I nuovi strumenti estendono questo modulo; configurazione, documentazione e test
+completano l'integrazione nell'applicazione.
 """
 
 from __future__ import annotations
 
+import csv
+import io
+import math
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional, Set, Type
 
-from src.models import ParsedResult, ParsedSample
+from src.models import ParsedBatch, ParsedResult, ParsedSample
+from src.validator import validate_sample_code
 
 
 class BaseInstrumentDriver(ABC):
@@ -52,6 +56,19 @@ class BaseInstrumentDriver(ABC):
         """
         sample = self.parse_file(file_path, transcode_map)
         return [sample] if sample else []
+
+    def parse_batch(
+        self,
+        file_path: Path | str,
+        transcode_map: Optional[Dict[str, str]] = None,
+        allowed_labs: Optional[Set[str]] = None,
+    ) -> ParsedBatch:
+        """Adatta i driver esistenti all'esito batch senza cambiarne il parsing.
+
+        allowed_labs serve ai driver che distinguono campioni e controlli durante
+        la lettura; per gli altri resta attiva la validazione nel servizio.
+        """
+        return ParsedBatch(samples=self.parse_samples(file_path, transcode_map))
 
     @staticmethod
     def _read_text_file(path: Path) -> str:
@@ -410,10 +427,140 @@ class MettlerToledoDriver(BaseInstrumentDriver):
         )
 
 
+class Agilent5977CDriver(BaseInstrumentDriver):
+    """Legge sequenze CSV Agilent: intestazione, riga ignorata, campioni/CQ.
+
+    Ogni riga valida contiene un campione e un risultato per colonna esame.
+    Il batch viene completato prima di restituire dati, così un CSV illeggibile
+    o un'intestazione ambigua non provoca salvataggi parziali.
+    """
+
+    name: str = "Agilent 5977C"
+
+    @staticmethod
+    def _exam_name(header: str) -> str:
+        """Toglie solo il suffisso finale Results, preservando il nome chimico."""
+        return re.sub(r"\s+Results$", "", header.strip(), flags=re.IGNORECASE).strip()
+
+    @staticmethod
+    def _matches_header(header: List[str]) -> bool:
+        """Riconosce la firma del report senza dipendere dal nome del file."""
+        return (
+            len(header) >= 2
+            and header[0].strip().casefold() == "sample"
+            and any(re.search(r"\s+Results$", cell.strip(), re.IGNORECASE) for cell in header[1:])
+        )
+
+    def can_handle(self, file_path: Path | str) -> bool:
+        """Controlla la sola intestazione; il parsing verifica poi tutto il CSV."""
+        try:
+            content = self._read_text_file(Path(file_path))
+            reader = csv.reader(io.StringIO(content, newline=""), strict=True)
+            return self._matches_header(next(reader, []))
+        except (OSError, csv.Error):
+            return False
+
+    def parse_batch(
+        self,
+        file_path: Path | str,
+        transcode_map: Optional[Dict[str, str]] = None,
+        allowed_labs: Optional[Set[str]] = None,
+    ) -> ParsedBatch:
+        """Restituisce campioni e scarti, usando i laboratori abilitati.
+
+        Un codice ignorato non è un errore. Una riga campione con larghezza
+        errata genera invece un avviso e non occupa la prima occorrenza utile.
+        Errori CSV e intestazioni duplicate sollevano ValueError sull'intero file.
+        """
+        path = Path(file_path)
+        reader = csv.reader(io.StringIO(self._read_text_file(path), newline=""), strict=True)
+        batch = ParsedBatch()
+        seen: Set[str] = set()
+        trans_map = transcode_map or {}
+        try:
+            header = next(reader, [])
+            if not self._matches_header(header):
+                raise ValueError("Intestazione Agilent non valida: attesi Sample e colonne esame Results")
+            names = [self._exam_name(cell) for cell in header[1:]]
+            # Dopo la pulizia due colonne non devono finire sullo stesso esame.
+            canonical_names = [name.casefold() for name in names]
+            if any(not name or name.casefold() == "results" for name in names):
+                raise ValueError("Intestazione Agilent con nome esame vuoto")
+            if len(set(canonical_names)) != len(names):
+                raise ValueError("Intestazione Agilent con nomi esame duplicati")
+            if next(reader, None) is None:
+                raise ValueError("Seconda riga Agilent mancante")
+
+            while True:
+                line_number = reader.line_num + 1
+                row = next(reader, None)
+                if row is None:
+                    break
+                if not row or not any(cell.strip() for cell in row):
+                    continue
+                valid, code, _ = validate_sample_code(row[0], allowed_labs)
+                if not valid or code is None:
+                    continue
+                if len(row) != len(header):
+                    batch.warnings.append(
+                        f"Riga {line_number} scartata: {len(row)} colonne invece di {len(header)}"
+                    )
+                    continue
+                if code.raw_code in seen:
+                    continue
+
+                results: List[ParsedResult] = []
+                for name, raw in zip(names, row[1:]):
+                    raw = raw.strip()
+                    numeric, formatted = self._normalize_value(raw)
+                    # NaN e Infinity non rappresentano concentrazioni numeriche:
+                    # applica anche a questi la conversione concordata a zero.
+                    if not math.isfinite(numeric):
+                        numeric, formatted = 0.0, "0"
+                    lis_code = trans_map.get(name)
+                    results.append(ParsedResult(
+                        param_name=name, raw_value=raw, numeric_value=numeric,
+                        formatted_value=formatted, lis_exam_code=lis_code,
+                        is_mapped=bool(lis_code),
+                    ))
+                batch.samples.append(ParsedSample(
+                    sample_code=code.raw_code, source_filename=path.name,
+                    results=results, instrument_name=self.name,
+                ))
+                seen.add(code.raw_code)
+        except csv.Error as exc:
+            raise ValueError(f"CSV Agilent illeggibile alla riga {reader.line_num}: {exc}") from exc
+
+        # Se tutti i campioni sono irregolari occorre correggere il file; un
+        # report valido di soli controlli può invece essere archiviato normalmente.
+        batch.archive_if_empty = not batch.warnings
+        return batch
+
+    def parse_samples(
+        self,
+        file_path: Path | str,
+        transcode_map: Optional[Dict[str, str]] = None,
+    ) -> List[ParsedSample]:
+        """Compatibilità lista campioni, con i prefissi laboratorio predefiniti."""
+        return self.parse_batch(file_path, transcode_map).samples
+
+    def parse_file(
+        self,
+        file_path: Path | str,
+        transcode_map: Optional[Dict[str, str]] = None,
+    ) -> ParsedSample:
+        """Restituisce il primo campione; segnala l'assenza senza inventare codici."""
+        samples = self.parse_samples(file_path, transcode_map)
+        if not samples:
+            raise ValueError("Nessun campione valido nel file Agilent")
+        return samples[0]
+
+
 # Registro dei driver disponibili
 AVAILABLE_DRIVERS: List[Type[BaseInstrumentDriver]] = [
     DionexICDriver,
     MettlerToledoDriver,
+    Agilent5977CDriver,
     SpectrophotometerDriver,
 ]
 

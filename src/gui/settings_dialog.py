@@ -12,7 +12,7 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Any, Callable, Dict, List, Optional
 
 from src.auth import SessionManager
-from src.config import AppConfig
+from src.config import DEFAULT_APP_VERSION, AppConfig
 from src.database import Database
 from src.gui.theme import (
     COLOR_DANGER,
@@ -171,6 +171,13 @@ class SettingsDialog(ctk.CTkToplevel):
 
     def _update_driver_info_text(self, driver_name: str) -> None:
         info_map = {
+            "Agilent 5977C": (
+                "• Formato: CSV con separatore virgola e decimali con punto\n"
+                "• Struttura: Sample ed esami Results in prima riga; seconda riga ignorata\n"
+                "• Multi-campione: codici validi dei laboratori abilitati; controlli ignorati\n"
+                "• Prima occorrenza valida per campione; righe irregolari segnalate e scartate\n"
+                "• Valori non numerici a 0; virgola decimale per il LIS."
+            ),
             "Cromatografo Ionico (Dionex / IC)": (
                 "• Formato: File di testo (.txt) con delimitatore di tabulazione\n"
                 "• Struttura: 'Sample Name:' alla prima riga, tabella 'Component / Amount' dalla riga 9+\n"
@@ -323,7 +330,7 @@ class SettingsDialog(ctk.CTkToplevel):
             entry.insert(0, selected)
 
     def _save_paths(self) -> None:
-        new_version = self.entry_version.get().strip() or "1.0"
+        new_version = self.entry_version.get().strip() or DEFAULT_APP_VERSION
         cfg = AppConfig(
             input_dir=self.entry_input.get().strip(),
             archive_dir=self.entry_archive.get().strip(),
@@ -439,6 +446,7 @@ class SettingsDialog(ctk.CTkToplevel):
             "id": "ID",
             "param": "Parametro Strumento",
             "lis_code": "Codice Esame LIS",
+            "substance": "Codice sostanza LIS",
             "desc": "Descrizione",
             "updated": "Ultimo Aggiornamento",
         }
@@ -454,6 +462,7 @@ class SettingsDialog(ctk.CTkToplevel):
         self.tree_trans.column("id", width=40, anchor="center")
         self.tree_trans.column("param", width=180, anchor="w")
         self.tree_trans.column("lis_code", width=140, anchor="center")
+        self.tree_trans.column("substance", width=135, anchor="center")
         self.tree_trans.column("desc", width=200, anchor="w")
         self.tree_trans.column("updated", width=150, anchor="center")
 
@@ -483,6 +492,7 @@ class SettingsDialog(ctk.CTkToplevel):
                 r.id,
                 r.instrument_param_name,
                 r.lis_exam_code,
+                r.lis_substance_code or "",
                 r.description,
                 r.updated_at or "-"
             ))
@@ -492,7 +502,7 @@ class SettingsDialog(ctk.CTkToplevel):
     def _show_add_transcoding_dialog(self) -> None:
         dlg = ctk.CTkToplevel(self)
         dlg.title("Nuova Transcodifica")
-        dlg.geometry("380x300")
+        dlg.geometry("420x400")
         dlg.transient(self)
         dlg.grab_set()
 
@@ -504,20 +514,24 @@ class SettingsDialog(ctk.CTkToplevel):
         entry_c = ctk.CTkEntry(dlg, font=FONT_NORMAL)
         entry_c.pack(fill="x", padx=25, pady=(0, 10))
 
+        ctk.CTkLabel(dlg, text="Codice sostanza LIS (vuoto per esami standard):", font=FONT_SMALL).pack(anchor="w", padx=25, pady=(5, 2))
+        entry_s = ctk.CTkEntry(dlg, font=FONT_NORMAL)
+        entry_s.pack(fill="x", padx=25, pady=(0, 10))
+
         ctk.CTkLabel(dlg, text="Descrizione opzionale:", font=FONT_SMALL).pack(anchor="w", padx=25, pady=(5, 2))
         entry_d = ctk.CTkEntry(dlg, font=FONT_NORMAL)
         entry_d.pack(fill="x", padx=25, pady=(0, 15))
 
         def save():
-            p, c, d = entry_p.get(), entry_c.get(), entry_d.get()
-            ok, msg = self.db.save_transcoding(p, c, d)
+            p, c, d, substance = entry_p.get(), entry_c.get(), entry_d.get(), entry_s.get()
+            ok, msg = self.db.save_transcoding(p, c, d, lis_substance_code=substance)
             if ok:
                 curr_user = SessionManager.get_user()
                 self.db.log_action(
                     curr_user.id if curr_user else None,
                     curr_user.username if curr_user else "admin",
                     "CONFIG_TRANSCODING_ADD",
-                    f"Aggiunta/aggiornata regola: {p} -> {c}"
+                    f"Aggiunta/aggiornata regola: {p} -> {c}; sostanza: {substance or '(standard)'}"
                 )
                 self._refresh_transcodings_list()
                 if self.on_config_changed:
@@ -539,13 +553,19 @@ class SettingsDialog(ctk.CTkToplevel):
         item = self.tree_trans.item(sel[0])
         vals = item["values"]
         rule_id = int(vals[0])
-        current_param = str(vals[1])
-        current_lis = str(vals[2])
-        current_desc = str(vals[3]) if vals[3] != "-" else ""
+        # Treeview può convertire '00500' in un numero: per modificare i codici
+        # usiamo sempre il record originale, mai il valore mostrato nella cella.
+        rule = self.db.get_transcoding_by_id(rule_id)
+        if rule is None:
+            messagebox.showerror("Errore", "Regola di transcodifica non trovata", parent=self)
+            return
+        current_param = rule.instrument_param_name
+        current_lis = rule.lis_exam_code
+        current_desc = rule.description
 
         dlg = ctk.CTkToplevel(self)
         dlg.title(f"Modifica Transcodifica - {current_param}")
-        dlg.geometry("380x300")
+        dlg.geometry("420x400")
         dlg.transient(self)
         dlg.grab_set()
 
@@ -559,21 +579,26 @@ class SettingsDialog(ctk.CTkToplevel):
         entry_c.insert(0, current_lis)
         entry_c.pack(fill="x", padx=25, pady=(0, 10))
 
+        ctk.CTkLabel(dlg, text="Codice sostanza LIS (vuoto per esami standard):", font=FONT_SMALL).pack(anchor="w", padx=25, pady=(5, 2))
+        entry_s = ctk.CTkEntry(dlg, font=FONT_NORMAL)
+        entry_s.insert(0, rule.lis_substance_code or "")
+        entry_s.pack(fill="x", padx=25, pady=(0, 10))
+
         ctk.CTkLabel(dlg, text="Descrizione opzionale:", font=FONT_SMALL).pack(anchor="w", padx=25, pady=(5, 2))
         entry_d = ctk.CTkEntry(dlg, font=FONT_NORMAL)
         entry_d.insert(0, current_desc)
         entry_d.pack(fill="x", padx=25, pady=(0, 15))
 
         def save():
-            p, c, d = entry_p.get(), entry_c.get(), entry_d.get()
-            ok, msg = self.db.update_transcoding(rule_id, p, c, d)
+            p, c, d, substance = entry_p.get(), entry_c.get(), entry_d.get(), entry_s.get()
+            ok, msg = self.db.update_transcoding(rule_id, p, c, d, lis_substance_code=substance)
             if ok:
                 curr_user = SessionManager.get_user()
                 self.db.log_action(
                     curr_user.id if curr_user else None,
                     curr_user.username if curr_user else "admin",
                     "CONFIG_TRANSCODING_UPDATE",
-                    f"Modificata regola ID {rule_id}: {p} -> {c}"
+                    f"Modificata regola ID {rule_id}: {p} -> {c}; sostanza: {substance or '(standard)'}"
                 )
                 self._refresh_transcodings_list()
                 if self.on_config_changed:
@@ -623,21 +648,19 @@ class SettingsDialog(ctk.CTkToplevel):
         if not file_path:
             return
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-            count = 0
-            for line in lines:
-                line = line.strip()
-                if not line or ":" not in line:
-                    continue
-                parts = line.split(":", 1)
-                p_name = parts[0].strip()
-                l_code = parts[1].strip()
-                if p_name and l_code:
-                    self.db.save_transcoding(p_name, l_code)
-                    count += 1
+            with open(file_path, "r", encoding="utf-8-sig") as f:
+                content = f.read()
+            ok, msg = self.db.import_transcodings_text(content)
+            if not ok:
+                messagebox.showerror("Importazione annullata", msg, parent=self)
+                return
             self._refresh_transcodings_list()
-            messagebox.showinfo("Importazione", f"Importate {count} regole con successo!", parent=self)
+            curr_user = SessionManager.get_user()
+            self.db.log_action(curr_user.id if curr_user else None,
+                               curr_user.username if curr_user else "admin", "CONFIG_TRANSCODING_IMPORT", msg)
+            if self.on_config_changed:
+                self.on_config_changed()
+            messagebox.showinfo("Importazione", msg, parent=self)
         except Exception as ex:
             messagebox.showerror("Errore", f"Impossibile leggere il file: {ex}", parent=self)
 
@@ -654,8 +677,7 @@ class SettingsDialog(ctk.CTkToplevel):
         try:
             rules = self.db.get_all_transcodings()
             with open(file_path, "w", encoding="utf-8") as f:
-                for r in rules:
-                    f.write(f"{r.instrument_param_name}:{r.lis_exam_code}\n")
+                f.write(self.db.export_transcodings_text())
             messagebox.showinfo("Esportazione", f"Esportate {len(rules)} regole su file!", parent=self)
         except Exception as ex:
             messagebox.showerror("Errore", f"Impossibile salvare il file: {ex}", parent=self)

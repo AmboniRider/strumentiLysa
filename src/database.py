@@ -54,6 +54,9 @@ class Database:
     def init_db(self) -> None:
         """Crea le tabelle del database se non esistono e popola i dati di default."""
         with self.get_connection() as conn:
+            # SQLite non apre una transazione per il solo DDL: includiamo anche
+            # ALTER TABLE e indici nello stesso aggiornamento atomico dello schema.
+            conn.execute("BEGIN")
             cursor = conn.cursor()
 
             # 1. Tabella Utenti
@@ -87,7 +90,8 @@ class Database:
                     lis_exam_code TEXT NOT NULL,
                     description TEXT,
                     is_active INTEGER DEFAULT 1,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    lis_substance_code TEXT
                 )
             """)
 
@@ -126,7 +130,8 @@ class Database:
                     lis_exam_code TEXT,
                     is_mapped INTEGER DEFAULT 1,
                     is_exported INTEGER DEFAULT 0,
-                    exported_at DATETIME
+                    exported_at DATETIME,
+                    lis_substance_code TEXT
                 )
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_sample_id ON sample_results(sample_id)")
@@ -144,6 +149,18 @@ class Database:
                 cursor.execute("ALTER TABLE sample_results ADD COLUMN exported_at DATETIME")
 
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_is_exported ON sample_results(is_exported)")
+
+            # Le colonne nullable mantengono standard tutti i dati preesistenti.
+            # Il controllo PRAGMA rende la migrazione ripetibile a ogni avvio.
+            for table in ("transcodings", "sample_results"):
+                columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+                if "lis_substance_code" not in columns:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN lis_substance_code TEXT")
+            conn.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_transcodings_active_substance
+                ON transcodings(lis_exam_code, lis_substance_code)
+                WHERE is_active = 1 AND lis_substance_code IS NOT NULL
+            """)
 
             # 6. Tabella Log di Audit
             cursor.execute("""
@@ -398,37 +415,161 @@ class Database:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM transcodings ORDER BY instrument_param_name ASC")
             return [
-                TranscodingRule(
-                    id=row["id"],
-                    instrument_param_name=row["instrument_param_name"],
-                    lis_exam_code=row["lis_exam_code"],
-                    description=row["description"] or "",
-                    is_active=bool(row["is_active"]),
-                    updated_at=row["updated_at"],
-                )
+                self._transcoding_from_row(row)
                 for row in cursor.fetchall()
             ]
 
-    def save_transcoding(self, param_name: str, lis_code: str, description: str = "") -> tuple[bool, str]:
-        """Aggiunge o aggiorna una regola di transcodifica."""
-        param_clean = param_name.strip()
-        lis_clean = lis_code.strip().upper()
-        if not param_clean or not lis_clean:
-            return False, "Parametro e Codice LIS sono obbligatori"
+    @staticmethod
+    def _transcoding_from_row(row: sqlite3.Row) -> TranscodingRule:
+        """Ricostruisce una regola mantenendo i codici sostanza come stringhe."""
+        return TranscodingRule(
+            id=row["id"], instrument_param_name=row["instrument_param_name"],
+            lis_exam_code=row["lis_exam_code"], description=row["description"] or "",
+            is_active=bool(row["is_active"]), updated_at=row["updated_at"],
+            lis_substance_code=row["lis_substance_code"],
+        )
 
+    def get_transcoding_rules_map(self, active_only: bool = True) -> Dict[str, TranscodingRule]:
+        """Restituisce le regole complete da una singola lettura del catalogo.
+
+        La mappa storica di stringhe resta disponibile per i driver esistenti.
+        Il servizio usa questa lettura per assegnare insieme esame e sostanza.
+        """
         with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO transcodings (instrument_param_name, lis_exam_code, description, updated_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(instrument_param_name) DO UPDATE SET
-                    lis_exam_code = excluded.lis_exam_code,
-                    description = excluded.description,
-                    is_active = 1,
-                    updated_at = CURRENT_TIMESTAMP
-            """, (param_clean, lis_clean, description.strip()))
-            conn.commit()
-        return True, f"Regola per '{param_clean}' salvata con successo"
+            query = "SELECT * FROM transcodings"
+            if active_only:
+                query += " WHERE is_active = 1"
+            return {row["instrument_param_name"]: self._transcoding_from_row(row)
+                    for row in conn.execute(query)}
+
+    def get_transcoding_by_id(self, transcoding_id: int) -> Optional[TranscodingRule]:
+        """Carica la regola per ID senza conversioni numeriche delle celle Tk."""
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM transcodings WHERE id = ?", (transcoding_id,)).fetchone()
+            return self._transcoding_from_row(row) if row else None
+
+    @staticmethod
+    def _clean_transcoding_values(
+        param_name: str, lis_code: str, lis_substance_code: Optional[str],
+    ) -> tuple[str, str, Optional[str]]:
+        """Valida i campi obbligatori e il codice sostanza, senza alterarne lettere o zeri."""
+        param, exam = param_name.strip(), lis_code.strip().upper()
+        substance = lis_substance_code.strip() if lis_substance_code else None
+        substance = substance or None
+        if not param or not exam:
+            raise ValueError("Parametro e Codice LIS sono obbligatori")
+        if substance is not None and not substance.isalnum():
+            raise ValueError("Il Codice sostanza LIS deve contenere soltanto lettere e cifre")
+        return param, exam, substance
+
+    @staticmethod
+    def _check_substance_target(
+        conn: sqlite3.Connection, exam: str, substance: Optional[str], exclude_id: Optional[int],
+    ) -> None:
+        """Impedisce che due regole attive producano valori per la stessa destinazione."""
+        if substance is None:
+            return
+        row = conn.execute("""
+            SELECT instrument_param_name FROM transcodings
+            WHERE is_active = 1 AND lis_exam_code = ? AND lis_substance_code = ?
+              AND (? IS NULL OR id != ?)
+        """, (exam, substance, exclude_id, exclude_id)).fetchone()
+        if row:
+            raise ValueError(f"Coppia esame/sostanza {exam}/{substance} già usata da '{row[0]}'")
+
+    @staticmethod
+    def _upsert_transcoding(
+        conn: sqlite3.Connection, param: str, exam: str, description: str, substance: Optional[str],
+    ) -> None:
+        """Scrive una regola nella transazione del chiamante, riattivandola se esistente."""
+        conn.execute("""
+            INSERT INTO transcodings
+                (instrument_param_name, lis_exam_code, description, lis_substance_code, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(instrument_param_name) DO UPDATE SET
+                lis_exam_code = excluded.lis_exam_code,
+                description = excluded.description,
+                lis_substance_code = excluded.lis_substance_code,
+                is_active = 1, updated_at = CURRENT_TIMESTAMP
+        """, (param, exam, description.strip(), substance))
+
+    def save_transcoding(
+        self, param_name: str, lis_code: str, description: str = "",
+        lis_substance_code: Optional[str] = None,
+    ) -> tuple[bool, str]:
+        """Aggiunge/aggiorna una regola; sostanza omessa o vuota significa esame standard."""
+        try:
+            param, exam, substance = self._clean_transcoding_values(param_name, lis_code, lis_substance_code)
+            with self.get_connection() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute("SELECT id FROM transcodings WHERE instrument_param_name = ?", (param,)).fetchone()
+                self._check_substance_target(conn, exam, substance, row[0] if row else None)
+                self._upsert_transcoding(conn, param, exam, description, substance)
+            return True, f"Regola per '{param}' salvata con successo"
+        except (ValueError, sqlite3.IntegrityError) as ex:
+            return False, f"Regola non salvata: {ex}"
+
+    def import_transcodings_text(self, content: str) -> tuple[bool, str]:
+        """Valida l'intero TXT e applica tutte le regole in una sola transazione.
+
+        Accetta Parametro:Esame[:Sostanza]. Errori, nomi ripetuti o destinazioni
+        concorrenti annullano l'intero import, compresi gli aggiornamenti.
+        """
+        parsed: list[tuple[str, str, Optional[str]]] = []
+        names: set[str] = set()
+        try:
+            for line_number, line in enumerate(content.splitlines(), 1):
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split(":")
+                if len(parts) not in (2, 3):
+                    raise ValueError(f"Riga {line_number}: usare Parametro:CodiceLIS[:CodiceSostanza]")
+                try:
+                    values = self._clean_transcoding_values(parts[0], parts[1], parts[2] if len(parts) == 3 else None)
+                except ValueError as ex:
+                    raise ValueError(f"Riga {line_number}: {ex}") from ex
+                name = values[0].casefold()
+                if name in names:
+                    raise ValueError(f"Riga {line_number}: parametro '{values[0]}' duplicato nel file")
+                names.add(name)
+                parsed.append(values)
+            if not parsed:
+                raise ValueError("Il file non contiene regole di transcodifica")
+
+            with self.get_connection() as conn:
+                # BEGIN IMMEDIATE evita che il catalogo cambi fra verifica e scrittura.
+                conn.execute("BEGIN IMMEDIATE")
+                final_rules = {row["instrument_param_name"].casefold():
+                               (row["lis_exam_code"], row["lis_substance_code"])
+                               for row in conn.execute("SELECT * FROM transcodings WHERE is_active = 1")}
+                final_rules.update({param.casefold(): (exam, substance) for param, exam, substance in parsed})
+                targets: dict[tuple[str, str], str] = {}
+                for name, (exam, substance) in final_rules.items():
+                    if substance is not None:
+                        target = (exam, substance)
+                        if target in targets:
+                            raise ValueError(f"Coppia esame/sostanza {exam}/{substance} duplicata: '{targets[target]}' e '{name}'")
+                        targets[target] = name
+                # Disattivazione temporanea nella stessa transazione: permette anche
+                # lo scambio di destinazioni fra regole senza collisioni intermedie.
+                conn.executemany("UPDATE transcodings SET is_active = 0 WHERE instrument_param_name = ?",
+                                 [(param,) for param, _, _ in parsed])
+                for param, exam, substance in parsed:
+                    self._upsert_transcoding(conn, param, exam, "", substance)
+            return True, f"Importate {len(parsed)} regole con successo"
+        except (ValueError, sqlite3.IntegrityError) as ex:
+            return False, f"Nessuna regola importata: {ex}"
+
+    def export_transcodings_text(self) -> str:
+        """Serializza le regole nel TXT compatibile con gli esami standard."""
+        lines = []
+        for rule in self.get_all_transcodings():
+            line = f"{rule.instrument_param_name}:{rule.lis_exam_code}"
+            if rule.lis_substance_code is not None:
+                line += f":{rule.lis_substance_code}"
+            lines.append(line)
+        return "\n".join(lines) + ("\n" if lines else "")
 
     def delete_transcoding(self, transcoding_id: int) -> tuple[bool, str]:
         """Elimina una regola di transcodifica."""
@@ -442,20 +583,22 @@ class Database:
         transcoding_id: int,
         param_name: str,
         lis_code: str,
-        description: str = ""
+        description: str = "",
+        lis_substance_code: Optional[str] = None,
     ) -> tuple[bool, str]:
         """Modifica una regola di transcodifica esistente identificata da ID.
 
         Verifica che i campi obbligatori siano compilati e che il nome del parametro
         non entri in collisione con un'altra regola già registrata a database.
         """
-        param_clean = param_name.strip()
-        lis_clean = lis_code.strip().upper()
-        if not param_clean or not lis_clean:
-            return False, "Parametro e Codice LIS sono obbligatori"
+        try:
+            param_clean, lis_clean, substance = self._clean_transcoding_values(param_name, lis_code, lis_substance_code)
+        except ValueError as ex:
+            return False, str(ex)
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            conn.execute("BEGIN IMMEDIATE")
             cursor.execute("SELECT id FROM transcodings WHERE id = ?", (transcoding_id,))
             if not cursor.fetchone():
                 return False, "Regola di transcodifica non trovata"
@@ -467,14 +610,20 @@ class Database:
             if cursor.fetchone():
                 return False, f"Esiste già una regola per il parametro '{param_clean}'"
 
+            try:
+                self._check_substance_target(conn, lis_clean, substance, transcoding_id)
+            except ValueError as ex:
+                return False, str(ex)
+
             cursor.execute("""
                 UPDATE transcodings
                 SET instrument_param_name = ?,
                     lis_exam_code = ?,
                     description = ?,
+                    lis_substance_code = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-            """, (param_clean, lis_clean, description.strip(), transcoding_id))
+            """, (param_clean, lis_clean, description.strip(), substance, transcoding_id))
             conn.commit()
 
         return True, f"Regola per '{param_clean}' aggiornata con successo"
@@ -537,11 +686,11 @@ class Database:
                         cursor.execute("""
                             INSERT INTO sample_results (
                                 sample_id, param_name, raw_value, numeric_value,
-                                formatted_value, lis_exam_code, is_mapped, is_exported
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+                                formatted_value, lis_exam_code, lis_substance_code, is_mapped, is_exported
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
                         """, (
                             sample_id, res.param_name, res.raw_value, res.numeric_value,
-                            res.formatted_value, res.lis_exam_code, 1 if res.is_mapped else 0
+                            res.formatted_value, res.lis_exam_code, res.lis_substance_code, 1 if res.is_mapped else 0
                         ))
                     conn.commit()
                     return True, f"Campione {clean_code} sovrascritto con {len(results)} parametri", sample_id
@@ -568,6 +717,7 @@ class Database:
                                 numeric_value = ?,
                                 formatted_value = ?,
                                 lis_exam_code = ?,
+                                lis_substance_code = ?,
                                 is_mapped = ?
                             WHERE id = ?
                         """, (
@@ -575,6 +725,7 @@ class Database:
                             res.numeric_value,
                             res.formatted_value,
                             res.lis_exam_code,
+                            res.lis_substance_code,
                             1 if res.is_mapped else 0,
                             old_row["id"]
                         ))
@@ -584,8 +735,8 @@ class Database:
                         cursor.execute("""
                             INSERT INTO sample_results (
                                 sample_id, param_name, raw_value, numeric_value,
-                                formatted_value, lis_exam_code, is_mapped, is_exported
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+                                formatted_value, lis_exam_code, lis_substance_code, is_mapped, is_exported
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
                         """, (
                             sample_id,
                             res.param_name,
@@ -593,6 +744,7 @@ class Database:
                             res.numeric_value,
                             res.formatted_value,
                             res.lis_exam_code,
+                            res.lis_substance_code,
                             1 if res.is_mapped else 0,
                         ))
                         new_params_count += 1
@@ -641,8 +793,8 @@ class Database:
                     cursor.execute("""
                         INSERT INTO sample_results (
                             sample_id, param_name, raw_value, numeric_value,
-                            formatted_value, lis_exam_code, is_mapped, is_exported
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+                            formatted_value, lis_exam_code, lis_substance_code, is_mapped, is_exported
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
                     """, (
                         sample_id,
                         res.param_name,
@@ -650,6 +802,7 @@ class Database:
                         res.numeric_value,
                         res.formatted_value,
                         res.lis_exam_code,
+                        res.lis_substance_code,
                         1 if res.is_mapped else 0,
                     ))
 
@@ -749,6 +902,7 @@ class Database:
                     numeric_value=row["numeric_value"] if row["numeric_value"] is not None else 0.0,
                     formatted_value=row["formatted_value"],
                     lis_exam_code=row["lis_exam_code"],
+                    lis_substance_code=row["lis_substance_code"],
                     is_mapped=bool(row["is_mapped"]),
                     id=row["id"],
                     is_exported=bool(row["is_exported"]) if "is_exported" in row.keys() else False,

@@ -27,6 +27,8 @@ class ParsedResult:
     id: Optional[int] = None
     is_exported: bool = False
     exported_at: Optional[str] = None
+    # Snapshot della transcodifica: una modifica alle regole non cambia lo storico.
+    lis_substance_code: Optional[str] = None
 
 
 @dataclass
@@ -36,6 +38,19 @@ class ParsedSample:
     source_filename: str
     results: list[ParsedResult] = field(default_factory=list)
     instrument_name: str = "Cromatografo Ionico (Dionex / IC)"
+
+
+@dataclass
+class ParsedBatch:
+    """Esito del parsing completo, prima di qualsiasi salvataggio.
+
+    samples contiene i campioni acquisibili; warnings descrive righe scartate.
+    archive_if_empty distingue un file valido di soli controlli da un fallimento.
+    Il default mantiene la gestione dei file vuoti dei driver preesistenti.
+    """
+    samples: list[ParsedSample] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    archive_if_empty: bool = False
 
 
 @dataclass
@@ -79,6 +94,7 @@ class TranscodingRule:
     description: str = ""
     is_active: bool = True
     updated_at: Optional[str] = None
+    lis_substance_code: Optional[str] = None
 
 
 @dataclass

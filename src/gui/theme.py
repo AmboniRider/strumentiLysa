@@ -21,6 +21,12 @@ COLOR_CARD_LIGHT = "#f6f8fa"
 COLOR_BORDER_DARK = "#30363d"
 COLOR_BORDER_LIGHT = "#d0d7de"
 
+# Stati visivi degli esami: la selezione per l'export prevale sullo stato LIS.
+COLOR_EXAM_SELECTED_BG = "#E6F4EA"
+COLOR_EXAM_SELECTED_TEXT = "#1B4332"
+COLOR_EXAM_SENT_BG = "#F1F3F5"
+COLOR_EXAM_SENT_TEXT = "#6B7280"
+
 # Font dell'applicazione
 FONT_FAMILY = "Segoe UI"
 FONT_TITLE = (FONT_FAMILY, 18, "bold")

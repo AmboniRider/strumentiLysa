@@ -20,6 +20,17 @@ Le cartelle operative vengono create quando necessarie; su un'installazione nuov
 il database viene inizializzato dall'applicazione. Utenti, impostazioni e dati
 delle altre postazioni non vengono trasferiti attraverso Git.
 
+## Trasferimento su un nuovo PC senza Python
+
+Su questa postazione eseguire `transfer.bat`, scegliere la cartella di destinazione
+e premere **Crea ZIP**. Il pacchetto conserva utenti, impostazioni e transcodifiche;
+esclude campioni, risultati, audit, file operativi e strumenti di sviluppo/Git.
+
+Sul nuovo PC Windows x64 estrarre tutto lo ZIP in una cartella scrivibile,
+eseguire `installa.bat` con Internet disponibile e poi `strumenti.bat`.
+L'installer configura automaticamente uv, Python e le dipendenze locali.
+Gli avvii successivi funzionano offline. Vedere [transfer.md](transfer.md).
+
 ## Sincronizzazione
 
 Dalla cartella del progetto eseguire:

@@ -3,4 +3,4 @@
 # Distributed under the terms of the GNU Affero General Public License v3 or later.
 
 """Pacchetto principale per l'interfaccia Strumenti-LIS."""
-__version__ = "0.1.0"
+__version__ = "1.1.0"

@@ -96,7 +96,7 @@ Tutta la logica di lettura, parsing e conversione dei file generati dagli strume
 
 ## 6. GESTIONE DELLA TABELLA DI TRANSCODIFICA
 
-La tabella di transcodifica associa il nome del parametro prodotto dallo strumento al codice esame ufficiale del LIS.
+La tabella di transcodifica associa il nome del parametro prodotto dallo strumento al codice esame ufficiale del LIS e, facoltativamente, a un codice sostanza LIS. Ogni sostanza ha un nome strumentale distinto; più parametri possono condividere lo stesso codice esame con sostanze differenti.
 
 ### 6.1 Esempio di Mappatura
 | Parametro Strumento | Codice Esame LIS | Descrizione Parametro |
@@ -112,7 +112,9 @@ La tabella di transcodifica associa il nome del parametro prodotto dallo strumen
 ### 6.2 Regole di Gestione
 - I dati di transcodifica sono salvati e mantenuti nella tabella `transcodings` del database SQLite.
 - L'amministratore può aggiungere, modificare o eliminare voci direttamente dalla scheda **Configurazione** della GUI.
-- È supportata la funzione di importazione/esportazione da file di testo (`transcodifica.txt`, formato `Parametro:CodiceLIS`).
+- È supportata la funzione di importazione/esportazione da file di testo (`transcodifica.txt`, formato `Parametro:CodiceLIS[:CodiceSostanza]`). Le righe a due campi configurano esami standard. La validazione dell'intero file e l'applicazione transazionale impediscono importazioni parziali in caso di errori o duplicati.
+- Il codice sostanza è testo alfanumerico facoltativo: gli spazi esterni sono eliminati, lettere e zeri iniziali conservati. Le coppie esame/sostanza delle regole attive sono univoche, anche tramite indice SQLite parziale.
+- L'importazione legge insieme le regole complete, passa ai driver la mappa di stringhe attuale e conserva nel risultato i codici esame e sostanza. Le modifiche alle regole si applicano solo a importazioni/reimportazioni successive.
 - **Parametri non mappati**: Se nel file dello strumento compare un parametro non presente nella tabella di transcodifica, il software visualizza un avviso visivo nella GUI, consentendo all'Admin di mapparlo rapidamente o all'operatore di escluderlo.
 
 ---
@@ -141,16 +143,16 @@ ANNO;ACCETTAZIONE;CONFERIMENTO;CAMPIONE;ALIQUOTA;UNITÀ CAMPIONARIA;N. RISULTATO
 | 6 | **UNITÀ CAMPIONARIA** | No | Vuoto | `` |
 | 7 | **N. RISULTATO** | No | Vuoto | `` |
 | 8 | **SEGNO** | No | Vuoto | `` |
-| 9 | **VALORE** | Sì | Valore numerico normalizzato con virgola decimale (es. `0,7733`, `8,6948`). Se il valore originale è non numerico (es. `n.a.`, `ND`, vuoto), viene esportato come `0`. | `0,7733` o `0` |
+| 9 | **VALORE** | Standard | Valore numerico normalizzato con virgola decimale, o `0` per non numerici. Vuoto nelle righe con sostanza. | `0,7733` o `0` |
 | 10 | **RISULTATO** | No | Vuoto | `` |
 | 11 | **TIPO ESAME** | Sì | Codice esame LIS ottenuto dalla tabella di transcodifica. | `BG00590` |
 | 12 | **ESITO** | No | Vuoto | `` |
 | 13 | **UNITÀ BGSURA** | No | Vuoto | `` |
 | 14 | **DATA INIZIO** | No | Vuoto | `` |
 | 15 | **DATA FINE** | No | Vuoto | `` |
-| 16 | **SOSTANZA** | No | Vuoto | `` |
+| 16 | **SOSTANZA** | Per sostanze | Codice sostanza LIS salvato nel risultato; vuoto per standard. | `50010` |
 | 17 | **RISULTATO SOSTANZA** | No | Vuoto | `` |
-| 18 | **VALORE SOSTANZA** | No | Vuoto | `` |
+| 18 | **VALORE SOSTANZA** | Per sostanze | Valore normalizzato del risultato; vuoto per standard. | `50,60` |
 | 19 | **SEGNO SOSTANZA** | No | Vuoto | `` |
 | 20 | **INCERTEZZA SOSTANZA**| No | Vuoto | `` |
 | 21 | **GERME** | No | Vuoto | `` |
@@ -159,6 +161,8 @@ ANNO;ACCETTAZIONE;CONFERIMENTO;CAMPIONE;ALIQUOTA;UNITÀ CAMPIONARIA;N. RISULTATO
 | 24 | **CODICE CAMPIONE** | Sì | Codice campione completo a 18 caratteri. | `BG2600104420010001` |
 
 ### 7.4 Tracciamento dello Stato dei Campioni e Gestione Storico
+- **Completezza degli esami con sostanze**: prima di scrivere il CSV, l'esportatore raggruppa le sostanze selezionate per campione e codice esame. I codici selezionati devono coincidere con tutte le sostanze delle transcodifiche attive correnti, una sola riga per codice. Un gruppo incompleto, duplicato o fuori catalogo viene saltato interamente; gli altri esami vengono esportati. Le spunte restano individuali e gli standard conservano il comportamento precedente.
+- **Esclusioni e conteggi**: il riepilogo e l'audit `EXPORT_LIS_SKIPPED` riportano campione, esame e motivi. Solo i risultati scritti cambiano stato; se non vi sono righe ammissibili, non si crea il CSV. Una rettifica mantiene gli stati precedenti e richiede un reinvio manuale dell'esame completo.
 - Ogni riga/campione esportato viene aggiornato nel database con:
   - Stato: `ESPORTATO`
   - Data e Ora di esportazione
@@ -274,6 +278,7 @@ Il database è strutturato con le seguenti tabelle relazionali:
 - `id`: INTEGER PRIMARY KEY AUTOINCREMENT
 - `instrument_param_name`: TEXT UNIQUE NOT NULL
 - `lis_exam_code`: TEXT NOT NULL
+- `lis_substance_code`: TEXT nullable; indice univoco `(lis_exam_code, lis_substance_code)` per regole attive con sostanza.
 - `description`: TEXT
 - `is_active`: INTEGER DEFAULT 1
 - `updated_at`: DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -300,7 +305,12 @@ Il database è strutturato con le seguenti tabelle relazionali:
 - `numeric_value`: REAL
 - `formatted_value`: TEXT NOT NULL
 - `lis_exam_code`: TEXT
+- `lis_substance_code`: TEXT nullable, snapshot della transcodifica all'importazione.
 - `is_mapped`: INTEGER DEFAULT 1
+- `is_exported`: INTEGER DEFAULT 0
+- `exported_at`: DATETIME
+
+Le colonne sostanza sono aggiunte con migrazione transazionale e ripetibile. I record precedenti rimangono senza sostanza; nessuna rimappatura o modifica degli stati di esportazione durante l'aggiornamento.
 
 ### 10.6 `audit_logs`
 - `id`: INTEGER PRIMARY KEY AUTOINCREMENT

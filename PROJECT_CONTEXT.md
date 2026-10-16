@@ -15,11 +15,21 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - **Linguaggio**: Python 3.11+
 - **Gestore Ambienti & Pacchetti**: `uv` (`uv sync`, `uv run`)
 - **GUI Framework**: `CustomTkinter`
+- **GUI trasferimento**: `Tkinter/ttk`, libreria standard, con worker e coda eventi.
 - **Database**: `SQLite 3` (locale, embedded)
 - **OS Target**: Windows (con portabilità per Linux/macOS)
 - **Licenza & Compatibilità**: Pienamente compatibile con GNU AGPLv3 (tutte le dipendenze esterne dirette e indirette adottano licenze permissive compatibili: MIT, BSD-3-Clause, BSD-2-Clause, Apache-2.0, HPND/MIT-CMU, PSF License; codice sorgente interno 100% originale privo di componenti proprietari terzi).
 
 ## Main Components
+- `driver.py`: include `Agilent5977CDriver`, CSV tabulare multi-campione riconosciuto
+  dal contenuto; prima riga utile per codice e controlli esclusi tramite validatore.
+- `ParsedBatch` in `src/models.py`: campioni, avvisi di riga e archiviazione vuota;
+  `parse_batch` adatta gli altri driver e riceve i laboratori configurati.
+- `strumenti.ico`: icona della finestra principale e dei dialoghi, caricata da
+  `src/gui/app_window.py` tramite percorso assoluto e inclusa nel trasferimento.
+- `trasfer.py` / `transfer.bat`: creazione ZIP Windows x64 tramite elenco esplicito;
+  backup SQLite ripulito da campioni, risultati e audit; installer e launcher
+  distribuiti generati con uv 0.12.14, Python 3.12.13 e dipendenze runtime bloccate.
 - [progetto.md](file:///d:/pyprg/strumenti/progetto.md): Specifiche dettagliate e complete del progetto.
 - [driver.py](file:///d:/pyprg/strumenti/driver.py): Modulo isolato contenente tutti i driver di parsing e conversione specifici degli strumenti.
 - [app.py](file:///d:/pyprg/strumenti/app.py): Entry point dell'applicazione desktop con banner ANSI e gestione finestra.
@@ -41,20 +51,83 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - `driver_implementati/`: Documentazione tecnico-operativa approfondita per ciascun driver implementato ([README.md](file:///d:/pyprg/strumenti/driver_implementati/README.md), [dionex_ic.md](file:///d:/pyprg/strumenti/driver_implementati/dionex_ic.md), [mettler_toledo.md](file:///d:/pyprg/strumenti/driver_implementati/mettler_toledo.md), [spettrofotometro_uv_vis.md](file:///d:/pyprg/strumenti/driver_implementati/spettrofotometro_uv_vis.md)).
 
 ## Development Conventions
+- Evidenza esami limitata al dettaglio: righe spuntate verdi e in grassetto;
+  righe già inviate non spuntate grigie; la selezione prevale per il reinvio.
+  Tag e font locali a `ExamDetail.Treeview`, senza modificare gli stili delle
+  altre tabelle. La riga con focus è sottolineata, distinta dalla spunta export.
+- Agilent: parsing completo prima del salvataggio; errori globali bloccanti,
+  righe campione con larghezza errata scartate con avviso, soli controlli archiviati.
+  Nessuna dipendenza aggiuntiva, migrazione DB o transcodifica reale precaricata.
+- Sostanze LIS: `lis_substance_code` facoltativo e finale nelle dataclass e nei CRUD;
+  codici memorizzati come testo, con lettere e zeri iniziali conservati. Migrazione
+  nullable transazionale e ripetibile su transcodifiche e risultati, senza backfill.
+- Regole complete lette insieme dal servizio di importazione; contratto dei driver
+  e `get_transcoding_map()` invariati. Esame e sostanza sono salvati come snapshot;
+  il merge aggiorna il valore e i codici senza riaprire gli invii già effettuati.
+- L'esportatore verifica gli esami con sostanze prima di scrivere: tutte le sostanze
+  del catalogo attivo corrente devono essere selezionate una sola volta. Gli esami
+  esclusi sono riepilogati e registrati nell'audit; stati e conteggi si riferiscono
+  soltanto alle righe scritte. Gli standard conservano il precedente tracciato.
+- TXT transcodifiche `Parametro:CodiceLIS[:CodiceSostanza]`, validazione completa e
+  aggiornamento atomico; coppie esame/sostanza univoche fra regole attive.
 - Modulo `driver.py` rigorosamente disaccoppiato dal resto del sistema con classe base `BaseInstrumentDriver`.
 - Codice campione a 18 caratteri con parsing posizionale rigoroso: Lab (1-2), Anno (3-4), Vuoto (5-6), Accettazione (7-11), Conferimento (12-14), Campione (15-18).
 - Valori numerici esportati con virgola decimale e valori non numerici convertiti a `0`.
 - Spostamento automatico dei file analizzati in `archiviati/` ed eventuali file errati in `errori/`.
 - Unione intelligente (Merge) dei campioni duplicati: aggiunta di nuovi parametri e aggiornamento di parametri esistenti senza azzeramento o perdita di test.
 - Tracciamento dello stato di esportazione LIS a livello di singolo parametro (`is_exported`, `exported_at` in `sample_results`).
+- Selezione export inizializzata per tutti i campioni visibili prima di aprire i
+  dettagli: soli ID pendenti al primo caricamento. Il cambio filtro conserva e
+  interseca le selezioni esistenti con gli ID ancora presenti, senza aggiungerne.
+  Il passaggio GUI-esportatore filtra sempre per ID; liste vuote o assenti non
+  autorizzano il caricamento di altri esami. I conteggi usano gli stessi insiemi.
 - Tracciamento dello stato dei campioni (`DA_ESPORTARE`, `ESPORTATO`, `ERRORE`): un campione rimane `DA_ESPORTARE` finché contiene almeno un test pendente, e passa a `ESPORTATO` solo quando tutti i suoi parametri sono stati trasmessi.
 - Visualizzazione predefinita con filtro di stato 'Da Esportare' e periodo dell'ultimo mese per mostrare prioritariamente i campioni pendenti da processare, con selettori rapidi per consultare gli esportati o l'intero storico.
 
 ## Technical Constraints
+- Il pacchetto trasferito richiede Internet per installazione/ripristino; uv,
+  Python e cache sono locali alla cartella estratta. L'esecuzione avviene offline.
+- Il trasferimento conserva utenti, impostazioni e transcodifiche. I quattro
+  percorsi operativi vengono ricreati al primo avvio; nessun dato campione o audit
+  viene distribuito. Il database sorgente non viene modificato.
 - Architettura 100% locale, nessun servizio cloud o dipendenza esterna obbligatoria.
 - Nessuna perdita accidentale di dati originali (i file elaborati vengono archiviati, non cancellati).
 
 ## Current Status & Active TODO
+- **2026-10-16 — Versione 1.1**: versione applicativa predefinita e valore
+  dell'installazione locale aggiornati da 1.0 a 1.1; metadati del pacchetto,
+  `src.__version__` e lockfile allineati a 1.1.0. Verificati lockfile,
+  configurazione/persistenza e visualizzazione della versione nelle finestre.
+- **2026-10-16 — Evidenza visiva esami**: tabella inferiore con verde chiaro
+  `#E6F4EA` / testo `#1B4332` per gli spuntati, grigio tenue `#F1F3F5` / testo
+  `#6B7280` per i già inviati esclusi. Legenda e sottolineatura del focus,
+  aggiornamento immediato su selezione individuale/collettiva e caricamento.
+  Intervento esclusivamente grafico; selezioni, database ed export invariati.
+  Verifica visiva Windows con dati sintetici e 22 test esistenti superati.
+- **2026-10-16 — Export selettivo verificato e corretto**: esportati soltanto
+  gli ID selezionati per ciascun campione, anche senza aprire tutti i dettagli.
+  Nessun recupero implicito degli esami quando la selezione è vuota o assente;
+  conteggi coerenti e reinvio manuale preservato. **122 test superati in 44,96
+  secondi**, inclusi 10 nuovi casi di regressione e verifiche dei CSV effettivi
+  con widget reali. Database e file operativi non utilizzati durante il collaudo.
+- **2026-10-15 — Agilent 5977C**: nuovo driver con esami variabili, suffisso Results
+  rimosso, prime occorrenze valide conservate, prefissi configurabili e risultati
+  non numerici a zero. Esito batch integrato nel servizio e nel riepilogo GUI;
+  documentazione in `driver_implementati/agilent_5977c.md`, inclusa nella whitelist
+  del trasferimento. Collaudo: **112 test superati in 33,90 secondi**, di cui 30
+  dedicati ad Agilent; esempio con 4 campioni/36 risultati e primo cloroformio
+  `0,6568`. Soltanto file e database temporanei durante le verifiche.
+- **2026-10-12 — Sostanze LIS**: campo facoltativo nelle transcodifiche e nella GUI,
+  persistenza nei risultati, export nelle colonne SOSTANZA/VALORE SOSTANZA,
+  controllo degli esami completi e reinvio completo manuale. Nessuna associazione
+  strumentale dell'esempio precaricata. Suite completa: **82 test superati** su
+  Python 3.12/Windows, con test nuovi dei dialoghi e worker ttk in sottoprocessi
+  isolati per evitare interferenze native Tcl/Tk durante il collaudo.
+- Trasferimento: generatore ttk, backup consistente con WAL, pulizia e VACUUM
+  della copia, verifica integrità ZIP e SQLite, nessuna dipendenza aggiuntiva.
+- Collaudo trasferimento: 12 test dedicati, suite completa a 57 test; installer
+  Internet e avvio offline verificati con runtime locale isolato. Rimane il
+  collaudo operativo su una postazione Windows x64 fisicamente distinta.
 - **Status**: Implementazione completata e verificata con successo.
 - **Funzionalità Implementate**:
   - Organizzazione file di esempio e test in `esempi/`.
@@ -101,7 +174,6 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - **Active TODO**:
   - Test sul campo con campioni reali generati dagli strumenti di laboratorio.
   - Eventuale implementazione di driver per ulteriori tipologie di strumenti analitici in `driver.py`.
-  - Verificare la selezione nell'esportazione dei campioni senza dettaglio aperto: il codice può esportare tutti i risultati se non è stata inizializzata la selezione dei singoli test. Il manuale ora richiede il controllo del dettaglio di ciascun campione prima dell'esportazione.
   - Verificare l'aggiornamento del titolo/versione durante una sessione autenticata: `AppWindow.update_app_title()` reinizializza anche la vista e richiama `show_login()`. I test attuali verificano il titolo, ma non la permanenza nella dashboard durante questa operazione.
   - Allineare la guida `transfer.md`: contiene riferimenti a `transer.md` inesistente e un conteggio storico di 18 test, mentre la suite attuale comprende 45 test.
 
@@ -111,8 +183,8 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - Driver registrati: Dionex IC, Mettler Toledo e UV-Vis. Il driver preferito ha priorità se compatibile; seguono riconoscimento automatico e fallback. I driver dipendono dai modelli condivisi, senza accesso diretto a database o GUI.
 - Importazione avviata manualmente dalla GUI; scansione non ricorsiva di `.txt`, `.csv`, `.dat`. I duplicati vengono uniti automaticamente nel flusso ordinario. Un file multi-campione viene archiviato se almeno un campione è gestito con successo, anche in presenza di altri campioni invalidi.
 - L'esportazione genera un file locale CSV UTF-8, separatore `;`, 24 colonne e terminatori CRLF. Lo stato "Inviato" indica la generazione del CSV, senza conferma di ricezione da parte del LIS. I parametri senza transcodifica vengono esportati usando il nome parametro come codice esame.
-- La selezione dei test vive nella GUI; l'esportatore rispetta la lista ricevuta. La preselezione dei parametri pendenti è gestita dalla vista di dettaglio, e il reinvio manuale dei parametri già esportati è possibile.
-- Versione del pacchetto in `pyproject.toml`: `0.1.0`; versione visualizzata: impostazione `app_version` persistita nel database, default `1.0`.
+- La selezione dei test vive nella GUI; l'esportatore rispetta la lista ricevuta. Dal 2026-10-16 la preselezione dei parametri pendenti è inizializzata per tutti i campioni al caricamento dell'elenco, anche senza aprire i dettagli. Il reinvio manuale dei parametri già esportati rimane possibile tramite selezione esplicita.
+- Versione del pacchetto in `pyproject.toml`: `1.1.0`; versione visualizzata: impostazione `app_version` persistita nel database, default `1.1` (aggiornamento del 2026-10-16).
 - Verifica eseguita con `uv --offline --no-cache run --no-sync pytest -q -p no:cacheprovider --basetemp=.pytest-analysis-check --tb=short`: **45 passed** fuori dalla sandbox. La prima esecuzione nella sandbox ha prodotto 32 test superati e 13 errori di inizializzazione Tcl/Tk.
 - Al momento della ricognizione la cartella non era un repository Git. Nessuna modifica al codice applicativo effettuata durante quella attività.
 

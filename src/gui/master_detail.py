@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import customtkinter as ctk
 from datetime import datetime
-from tkinter import messagebox, ttk
+from tkinter import font as tkfont, messagebox, ttk
 from typing import Callable, Dict, List, Optional, Set
 
 from src.auth import SessionManager
@@ -23,6 +23,10 @@ from src.gui.theme import (
     COLOR_CARD_LIGHT,
     COLOR_DANGER,
     COLOR_DANGER_HOVER,
+    COLOR_EXAM_SELECTED_BG,
+    COLOR_EXAM_SELECTED_TEXT,
+    COLOR_EXAM_SENT_BG,
+    COLOR_EXAM_SENT_TEXT,
     COLOR_PRIMARY,
     COLOR_PRIMARY_HOVER,
     COLOR_SECONDARY,
@@ -66,6 +70,8 @@ class MasterDetailView(ctk.CTkFrame):
         self.selected_tests_by_sample: Dict[int, Set[int]] = {}
         self.loaded_samples: List[SampleRecord] = []
         self.selected_sample_for_detail: Optional[SampleRecord] = None
+        # Cache esclusivamente grafica dello stato LIS del dettaglio mostrato.
+        self._detail_exported_ids: Set[int] = set()
 
         self._create_widgets()
         self._load_samples()
@@ -400,17 +406,30 @@ class MasterDetailView(ctk.CTkFrame):
         )
         self.btn_sel_all_tests.pack(side="right", padx=(5, 0))
 
+        self.lbl_detail_legend = ctk.CTkLabel(
+            detail_frame,
+            text="Verde: selezionato per export · Grigio: già inviato",
+            font=FONT_SMALL,
+            anchor="w",
+        )
+        self.lbl_detail_legend.pack(fill="x", padx=10, pady=(0, 3))
+
         # Tabella Detail
         tree_container = ctk.CTkFrame(detail_frame, fg_color="transparent")
         tree_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
-        cols = ("sel", "status_lis", "param", "lis_code", "raw_val", "fmt_val", "mapping")
-        self.tree_detail = ttk.Treeview(tree_container, columns=cols, show="headings", selectmode="browse")
+        cols = ("sel", "status_lis", "param", "lis_code", "substance", "raw_val", "fmt_val", "mapping")
+        self.tree_detail = ttk.Treeview(
+            tree_container, columns=cols, show="headings", selectmode="browse",
+            style="ExamDetail.Treeview",
+        )
+        self._configure_detail_row_styles()
 
         self.tree_detail.heading("sel", text="Export")
         self.tree_detail.heading("status_lis", text="Stato LIS")
         self.tree_detail.heading("param", text="Parametro Strumento")
         self.tree_detail.heading("lis_code", text="Codice Esame LIS")
+        self.tree_detail.heading("substance", text="Codice sostanza LIS")
         self.tree_detail.heading("raw_val", text="Valore Originale")
         self.tree_detail.heading("fmt_val", text="Valore Esportato LIS")
         self.tree_detail.heading("mapping", text="Stato Mappatura")
@@ -419,6 +438,7 @@ class MasterDetailView(ctk.CTkFrame):
         self.tree_detail.column("status_lis", width=105, anchor="center")
         self.tree_detail.column("param", width=200, anchor="w")
         self.tree_detail.column("lis_code", width=130, anchor="center")
+        self.tree_detail.column("substance", width=130, anchor="center")
         self.tree_detail.column("raw_val", width=130, anchor="center")
         self.tree_detail.column("fmt_val", width=130, anchor="center")
         self.tree_detail.column("mapping", width=130, anchor="center")
@@ -432,6 +452,68 @@ class MasterDetailView(ctk.CTkFrame):
         # Eventi di selezione e click sui test
         self.tree_detail.bind("<Double-1>", self._on_detail_row_double_click)
         self.tree_detail.bind("<space>", self._on_detail_row_space)
+        self.tree_detail.bind("<<TreeviewSelect>>", self._update_detail_focus_styles, add="+")
+        self.tree_detail.bind("<FocusIn>", self._update_detail_focus_styles, add="+")
+        self.tree_detail.bind("<FocusOut>", self._update_detail_focus_styles, add="+")
+
+    def _configure_detail_row_styles(self) -> None:
+        """Configura colori e font locali senza cambiare le altre tabelle.
+
+        La riga attiva indica la posizione del cursore, non l'autorizzazione
+        all'export: togliamo solo i colori associati a quello stato, lasciando
+        intatti layout e navigazione da tastiera. Una sottolineatura locale
+        segnala la riga con focus anche se il tema nativo usa solo il colore.
+        """
+        style = ttk.Style(self.tree_detail)
+        for option in ("background", "foreground"):
+            style.map("ExamDetail.Treeview", **{
+                option: [entry for entry in style.map("Treeview", option)
+                         if not any("selected" in str(state) for state in entry[:-1])]
+            })
+
+        # Copie locali: nessuna modifica al font condiviso TkDefaultFont.
+        self._detail_normal_font = tkfont.Font(
+            root=self, font=style.lookup("Treeview", "font") or "TkDefaultFont",
+        )
+        self._detail_selected_font = self._detail_normal_font.copy()
+        self._detail_selected_font.configure(weight="bold")
+        self._detail_focus_fonts: list[tkfont.Font] = []
+        for tag, colors, font in (
+            ("export_selected", {"background": COLOR_EXAM_SELECTED_BG,
+                                 "foreground": COLOR_EXAM_SELECTED_TEXT}, self._detail_selected_font),
+            ("already_sent", {"background": COLOR_EXAM_SENT_BG,
+                              "foreground": COLOR_EXAM_SENT_TEXT}, self._detail_normal_font),
+            ("pending", {}, self._detail_normal_font),
+        ):
+            self.tree_detail.tag_configure(tag, **colors, font=font)
+            focus_font = font.copy()
+            focus_font.configure(underline=True)
+            self._detail_focus_fonts.append(focus_font)
+            self.tree_detail.tag_configure(f"{tag}_focus", **colors, font=focus_font)
+
+    def _update_detail_focus_styles(self, event: object = None) -> None:
+        """Distingue il cursore dalle spunte senza cambiare selezioni o valori."""
+        for row_id in self.tree_detail.get_children():
+            self._update_detail_row_style(int(row_id))
+
+    def _update_detail_row_style(self, result_id: int) -> None:
+        """Aggiorna una riga usando gli stati esistenti, senza modificarli.
+
+        La spunta prevale sullo stato Inviato per rendere evidente un reinvio;
+        una riga pendente esclusa conserva invece l'aspetto normale del tema.
+        """
+        sample = self.selected_sample_for_detail
+        if sample is None or not self.tree_detail.exists(str(result_id)):
+            return
+        if result_id in self.selected_tests_by_sample.get(sample.id, set()):
+            tag = "export_selected"
+        elif result_id in self._detail_exported_ids:
+            tag = "already_sent"
+        else:
+            tag = "pending"
+        if self.tree_detail.focus_get() == self.tree_detail and self.tree_detail.focus() == str(result_id):
+            tag += "_focus"
+        self.tree_detail.item(str(result_id), tags=(tag,))
 
     # =========================================================================
     # 5. FOOTER / ACTION BAR
@@ -509,6 +591,23 @@ class MasterDetailView(ctk.CTkFrame):
                 s_id: test_set for s_id, test_set in self.selected_tests_by_sample.items() if s_id in current_ids
             }
 
+        # Inizializza le spunte per TUTTI i campioni, anche senza aprirne il
+        # dettaglio. Una selezione già esistente può soltanto perdere ID non
+        # più presenti: nuovi risultati non devono ampliare un invio preparato.
+        for sample in self.loaded_samples:
+            if sample.id is None:
+                continue
+            results = self.db.get_sample_results(sample.id)
+            available_ids = {r.id for r in results if r.id is not None}
+            if sample.id in self.selected_tests_by_sample:
+                self.selected_tests_by_sample[sample.id].intersection_update(available_ids)
+            else:
+                self.selected_tests_by_sample[sample.id] = {
+                    r.id for r in results if r.id is not None and not r.is_exported
+                }
+            if not self.selected_tests_by_sample[sample.id]:
+                self.selected_sample_ids.discard(sample.id)
+
         # Popola tabella Master
         for row in self.tree_master.get_children():
             self.tree_master.delete(row)
@@ -517,10 +616,7 @@ class MasterDetailView(ctk.CTkFrame):
             is_sel = " [✓] " if s.id in self.selected_sample_ids else " [  ] "
             status_icon = "🟢 Esportato" if s.status == "ESPORTATO" else "🟠 Da Esportare"
 
-            if s.id in self.selected_tests_by_sample:
-                sel_tests = len(self.selected_tests_by_sample[s.id])
-            else:
-                sel_tests = s.pending_results_count if s.status == "DA_ESPORTARE" else s.results_count
+            sel_tests = len(self.selected_tests_by_sample.get(s.id, set()))
 
             params_display = f"{sel_tests}/{s.results_count}"
 
@@ -558,7 +654,7 @@ class MasterDetailView(ctk.CTkFrame):
         visible_count = len(self.loaded_samples)
 
         sel_tests_total = sum(
-            len(self.selected_tests_by_sample[s.id]) if s.id in self.selected_tests_by_sample else (s.pending_results_count if s.status == "DA_ESPORTARE" else s.results_count)
+            len(self.selected_tests_by_sample.get(s.id, set()))
             for s in self.loaded_samples
             if s.id in self.selected_sample_ids
         )
@@ -591,12 +687,13 @@ class MasterDetailView(ctk.CTkFrame):
             self.tree_detail.delete(row)
 
         results = self.db.get_sample_results(sample.id) # type: ignore
+        self._detail_exported_ids = {
+            r.id for r in results if r.id is not None and r.is_exported
+        }
 
-        # Se non ancora inizializzato, seleziona per default solo i test non ancora inviati (is_exported == False)
-        if sample.id not in self.selected_tests_by_sample:
-            self.selected_tests_by_sample[sample.id] = {r.id for r in results if r.id is not None and not r.is_exported}
-
-        selected_test_ids = self.selected_tests_by_sample[sample.id]
+        # Aprire un dettaglio visualizza le spunte già preparate al caricamento:
+        # la navigazione fra campioni non modifica ciò che verrà esportato.
+        selected_test_ids = self.selected_tests_by_sample.get(sample.id, set())
 
         for r in results:
             is_sel = " [✓] " if r.id in selected_test_ids else " [  ] "
@@ -611,14 +708,18 @@ class MasterDetailView(ctk.CTkFrame):
                     status_lis,
                     r.param_name,
                     r.lis_exam_code or "---",
+                    r.lis_substance_code or "",
                     r.raw_value,
                     r.formatted_value,
                     mapping_status
                 )
             )
+            if r.id is not None:
+                self._update_detail_row_style(r.id)
 
     def _clear_detail_panel(self) -> None:
         self.selected_sample_for_detail = None
+        self._detail_exported_ids.clear()
         self.lbl_detail_title.configure(text="🔬 Parametri e Risultati Analitici (Nessun campione presente)")
         for row in self.tree_detail.get_children():
             self.tree_detail.delete(row)
@@ -658,6 +759,7 @@ class MasterDetailView(ctk.CTkFrame):
             vals = list(self.tree_detail.item(str(test_id))["values"])
             vals[0] = new_val
             self.tree_detail.item(str(test_id), values=vals)
+            self._update_detail_row_style(test_id)
 
         # Sincronizza stato con la tabella Master
         self._sync_sample_with_test_selection(sample.id)
@@ -703,6 +805,7 @@ class MasterDetailView(ctk.CTkFrame):
                 vals = list(self.tree_detail.item(str(r.id))["values"])
                 vals[0] = " [✓] "
                 self.tree_detail.item(str(r.id), values=vals)
+                self._update_detail_row_style(r.id)
 
         # Assicura che il campione sia selezionato anche nel Master
         self.selected_sample_ids.add(sample.id)
@@ -725,6 +828,7 @@ class MasterDetailView(ctk.CTkFrame):
             vals = list(self.tree_detail.item(r_id)["values"])
             vals[0] = " [  ] "
             self.tree_detail.item(r_id, values=vals)
+            self._update_detail_row_style(int(r_id))
 
         # Se 0 test, deseleziona automaticamente il campione nel Master
         self.selected_sample_ids.discard(sample.id)
@@ -763,7 +867,7 @@ class MasterDetailView(ctk.CTkFrame):
             item = self.tree_master.item(str(sample_id))
             vals = list(item["values"])
             vals[0] = new_val
-            sel_tests = len(self.selected_tests_by_sample.get(sample_id, set())) if sample_id in self.selected_tests_by_sample else sample.results_count
+            sel_tests = len(self.selected_tests_by_sample.get(sample_id, set()))
             vals[7] = f"{sel_tests}/{sample.results_count}"
             self.tree_master.item(str(sample_id), values=vals)
 
@@ -788,7 +892,7 @@ class MasterDetailView(ctk.CTkFrame):
                     results = self.db.get_sample_results(s.id)
                     self.selected_tests_by_sample[s.id] = {r.id for r in results if r.id is not None}
 
-                sel_tests = len(self.selected_tests_by_sample[s.id]) if s.id in self.selected_tests_by_sample else s.results_count
+                sel_tests = len(self.selected_tests_by_sample.get(s.id, set()))
 
                 if self.tree_master.exists(str(s.id)):
                     item = self.tree_master.item(str(s.id))
@@ -852,7 +956,17 @@ class MasterDetailView(ctk.CTkFrame):
             if summary.unmapped_params_global:
                 msg += f"\n⚠️ Parametri non presenti in transcodifica:\n{', '.join(sorted(summary.unmapped_params_global))}"
 
-            if summary.error_count > 0:
+            if summary.messages:
+                msg += "\n\nInformazioni:\n" + "\n".join(summary.messages)
+            if summary.warnings:
+                msg += "\n\nRighe scartate:\n" + "\n".join(summary.warnings)
+            # Riporta anche la causa degli errori globali (es. intestazioni
+            # ambigue), così l'operatore sa cosa correggere prima di riprovare.
+            errors = [f"{item.filename}: {item.message}" for item in summary.items if item.status == "ERROR"]
+            if errors:
+                msg += "\n\nDettagli errori:\n" + "\n".join(errors)
+
+            if summary.error_count > 0 or summary.warnings:
                 messagebox.showwarning("Riepilogo Importazione", msg, parent=self)
             else:
                 messagebox.showinfo("Riepilogo Importazione", msg, parent=self)
@@ -872,10 +986,10 @@ class MasterDetailView(ctk.CTkFrame):
             if not s_full:
                 continue
 
-            # Se l'operatore ha personalizzato i test per questo campione, applica il filtro
-            if s_id in self.selected_tests_by_sample:
-                selected_test_ids = self.selected_tests_by_sample[s_id]
-                s_full.results = [r for r in s_full.results if r.id in selected_test_ids]
+            # Il filtro è sempre obbligatorio: una selezione assente o vuota
+            # non autorizza l'invio di altri risultati recuperati dal database.
+            selected_test_ids = self.selected_tests_by_sample.get(s_id, set())
+            s_full.results = [r for r in s_full.results if r.id in selected_test_ids]
 
             if s_full.results:
                 samples_to_export.append(s_full)
@@ -892,14 +1006,13 @@ class MasterDetailView(ctk.CTkFrame):
                 self.current_user.id,
                 self.current_user.username,
                 "EXPORT_LIS",
-                f"File: {out_file.name} - Campioni: {len(samples_to_export)} - Righe: {count}"
+                f"File: {out_file.name} - {msg}"
             )
             messagebox.showinfo(
                 "Esportazione Completata",
                 f"File CSV generato con successo per il LIS!\n\n"
                 f"• Destinazione: {out_file}\n"
-                f"• Campioni esportati: {len(samples_to_export)}\n"
-                f"• Righe analitiche: {count}",
+                f"\n{msg}",
                 parent=self
             )
             self._load_samples(preserve_selection=True)

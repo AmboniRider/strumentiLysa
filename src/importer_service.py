@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, List, Optional, Set
 
-from driver import parse_instrument_file, parse_instrument_samples
+from driver import get_driver
 from src.config import AppConfig
 from src.database import Database
 from src.models import ParsedSample, SampleRecord
@@ -29,10 +29,11 @@ class ImportItemResult:
     filepath: Path
     filename: str
     sample_code: str = ""
-    status: str = "PENDING"  # 'SUCCESS', 'DUPLICATE', 'ERROR', 'SKIPPED'
+    status: str = "PENDING"  # SUCCESS, MERGED, DUPLICATE, ERROR, SKIPPED, INFO
     message: str = ""
     parsed_sample: Optional[ParsedSample] = None
     unmapped_params: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -46,6 +47,8 @@ class ImportBatchSummary:
     skipped_count: int = 0
     items: List[ImportItemResult] = field(default_factory=list)
     unmapped_params_global: Set[str] = field(default_factory=set)
+    warnings: List[str] = field(default_factory=list)
+    messages: List[str] = field(default_factory=list)
 
 
 class ImporterService:
@@ -79,24 +82,41 @@ class ImporterService:
         if not filepath.is_file():
             return [ImportItemResult(filepath=filepath, filename=filepath.name, status="ERROR", message="File non trovato")]
 
-        trans_map = self.db.get_transcoding_map(active_only=True)
+        # Esame e sostanza devono provenire dalla stessa lettura delle regole:
+        # i driver continuano a ricevere la mappa di sole stringhe già supportata.
+        rules_map = self.db.get_transcoding_rules_map(active_only=True)
+        trans_map = {name: rule.lis_exam_code for name, rule in rules_map.items()}
         allowed_labs = config.allowed_labs_set
 
         # 1. Parsing tramite driver (estrae uno o più campioni)
         try:
-            parsed_samples = parse_instrument_samples(filepath, trans_map, driver_name=config.default_driver)
+            driver = get_driver(filepath, preferred_driver_name=config.default_driver)
+            batch = driver.parse_batch(filepath, trans_map, allowed_labs=allowed_labs)
+            parsed_samples = batch.samples
         except Exception as ex:
             self._move_file_to(filepath, config.error_dir)
             return [ImportItemResult(filepath=filepath, filename=filepath.name, status="ERROR", message=f"Errore durante il parsing del file: {ex}")]
 
         if not parsed_samples:
+            if batch.archive_if_empty:
+                self._move_file_to(filepath, config.archive_dir)
+                return [ImportItemResult(
+                    filepath=filepath, filename=filepath.name, status="INFO",
+                    message="File archiviato senza campioni validi: soltanto controlli o identificativi ignorati",
+                )]
             self._move_file_to(filepath, config.error_dir)
-            return [ImportItemResult(filepath=filepath, filename=filepath.name, status="ERROR", message="Nessun dato analitico estratto dal file")]
+            return [ImportItemResult(
+                filepath=filepath, filename=filepath.name, status="ERROR",
+                message="Nessun dato analitico estratto dal file", warnings=batch.warnings,
+            )]
 
         item_results: List[ImportItemResult] = []
         any_success_or_handled = False
 
         for parsed in parsed_samples:
+            for result in parsed.results:
+                rule = rules_map.get(result.param_name)
+                result.lis_substance_code = rule.lis_substance_code if rule else None
             item = ImportItemResult(
                 filepath=filepath,
                 filename=filepath.name,
@@ -172,6 +192,9 @@ class ImporterService:
             if not has_only_duplicates:
                 self._move_file_to(filepath, config.error_dir)
 
+        # Le segnalazioni appartengono al file: agganciale una sola volta, senza
+        # creare falsi campioni o modificare i conteggi di importazione/duplicati.
+        item_results[0].warnings.extend(batch.warnings)
         return item_results
 
     def process_single_file(
@@ -245,6 +268,10 @@ class ImporterService:
                     summary.skipped_count += 1
                 elif res.status == "ERROR":
                     summary.error_count += 1
+                elif res.status == "INFO":
+                    summary.messages.append(f"{res.filename}: {res.message}")
+
+                summary.warnings.extend(f"{res.filename}: {warning}" for warning in res.warnings)
 
                 summary.items.append(res)
                 if res.unmapped_params:

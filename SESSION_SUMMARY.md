@@ -1,5 +1,255 @@
 # SESSION SUMMARY
 
+## Preparazione sincronizzazione GitHub — 2026-10-16
+### Decisions and Activities
+- Richiesto l'aggiornamento del repository GitHub con tutte le modifiche locali,
+  inclusi versione applicativa 1.1, metadati 1.1.0, export selettivo, evidenza
+  grafica, sostanze LIS, driver Agilent e aggiornamenti del trasferimento.
+- Verificati ramo `main`, remoto `AmboniRider/strumentiLysa`, prerequisiti con
+  `sync.bat --check` e assenza di errori con `git diff --check`.
+- Pubblicazione tramite `sync.bat`: commit, fetch, merge e push ordinario;
+  database, cartelle operative e materiali temporanei esclusi da `.gitignore`.
+### Issues and Solutions
+- Nessun conflitto o operazione Git sospesa rilevato nella verifica preliminare.
+- L'esecuzione di `sync.bat` è stata respinta prima dell'avvio dalla revisione
+  automatica: richiede approvazione esplicita per tutte le 32 modifiche locali
+  e la pubblicazione diretta su `main`. Nessun commit o push eseguito;
+  richiesta conferma dell'ambito, senza tentare percorsi alternativi.
+
+## Incremento versione 1.1 — 2026-10-16
+### Decisions and Activities
+- Su richiesta, versione applicativa avanzata da 1.0 a 1.1 e metadati Python
+  allineati a 1.1.0 in `pyproject.toml`, `uv.lock` e `src/__init__.py`.
+- Aggiornato `DEFAULT_APP_VERSION` in `src/config.py`; il fallback del dialogo
+  impostazioni ora usa la stessa costante anziché il precedente valore letterale.
+- Aggiornate le aspettative preesistenti in `tests/test_version_config.py`.
+  `uv --offline --no-cache lock --check` completato con successo.
+- Aggiornata soltanto la chiave `app_version` del database dell'installazione
+  locale da 1.0 a 1.1, in transazione con verifica del valore precedente;
+  confermato il valore persistito. Nessuna modifica ai campioni o ai risultati.
+- Verifica della versione: 5 test pytest superati; il controllo esistente del
+  titolo finestra è passato separatamente in un processo con un solo interprete
+  Tk, verificando sia la versione iniziale 1.1 sia l'aggiornamento dinamico.
+- Aggiornati `PROJECT_CONTEXT.md` e questo riepilogo. La versione locale sarà
+  letta dalle finestre al prossimo avvio dell'applicazione.
+### Issues and Solutions
+- Eseguendo insieme i 6 test di versione, quello che crea `AppWindow` oltre alla
+  root della fixture ha riscontrato errori ambientali `init.tcl` / `tk.tcl`.
+  Ripetuto lo stesso controllo in isolamento, passando un contenitore di cleanup
+  vuoto al posto della root aggiuntiva: finestra reale e aggiornamento verificati.
+  Nessuna modifica al codice GUI per aggirare il problema dell'ambiente di test.
+
+## Evidenza visiva degli esami — 2026-10-16
+### Decisions and Activities
+- Implementato il piano approvato, limitando le modifiche funzionali alla
+  presentazione della tabella inferiore. Preservate le modifiche preesistenti.
+- `src/gui/theme.py`: colori condivisi del dettaglio, verde `#E6F4EA` con testo
+  `#1B4332`, grigio `#F1F3F5` con testo `#6B7280`.
+- `src/gui/master_detail.py`: stile dedicato `ExamDetail.Treeview`, font locali,
+  tag basati su spunte e stato LIS, legenda e indicazione sottolineata del focus.
+  Il verde/grassetto prevale anche sugli esami già inviati selezionati per reinvio;
+  gli altri già inviati restano grigi e i pendenti esclusi hanno aspetto ordinario.
+- I colori si aggiornano dopo clic/Spazio, comandi collettivi, cambio campione e
+  ricaricamento; nessuna modifica a database, esportatore, selezioni o comandi.
+- Aggiornati `PROJECT_CONTEXT.md` e `SESSION_SUMMARY.md` per registrare il criterio
+  grafico e il collaudo; nessuna nuova dipendenza e nessuna nuova API pubblica.
+- Collaudo Windows con quattro stati sintetici: screenshot della sola finestra
+  temporanea, verifica dei colori reali anche con focus su riga grigia e verde,
+  stato Inviato conservato nel reinvio, Spazio, selezione collettiva e refresh.
+  Verificata anche l'invarianza delle mappe globali Treeview e della tabella Master.
+  Materiale temporaneo nella cartella ignorata `.pytest-exam-style-preview/`.
+- Verifica finale: **22 test esistenti superati** relativi a selezione, export,
+  merge e GUI. Comando PowerShell, ambiente già sincronizzato:
+  ```powershell
+  $env:TMP = Join-Path (Get-Location) '.pytest-selection-uvtmp'
+  $env:TEMP = $env:TMP
+  uv --offline --no-cache run --no-sync python -m pytest tests/test_selective_export.py tests/test_exporter.py tests/test_duplicate_merge.py tests/test_gui.py -q -p no:cacheprovider --basetemp=.pytest-exam-style-final --tb=short
+  ```
+### Issues and Solutions
+- Il tema Windows sovrappone i colori della riga attiva ai tag. Rimosse le sole
+  mappe di selezione dallo stile locale, mantenendo intatte quelle globali;
+  sottolineata la riga con focus per distinguere il cursore dalla scelta di export.
+- Le prove visive hanno usato esclusivamente campioni e database sintetici
+  temporanei; nessun accesso ai campioni o alle cartelle operative.
+
+## Esportazione dei soli esami selezionati — 2026-10-16
+### Decisions and Activities
+- Analizzati struttura, modello dati, selezioni Master/Detail, esportatore e
+  aggiornamento degli stati SQLite; preservate le modifiche preesistenti.
+- Riprodotto con widget reali e CSV temporanei il reinvio indebito di esami già
+  esportati su campioni il cui dettaglio non era mai stato aperto. Prima della
+  correzione, la verifica dedicata ha prodotto 3 fallimenti e 6 test superati.
+- Inizializzata la selezione dei test pendenti per tutti i campioni visibili;
+  campioni senza test spuntati deselezionati, conteggi allineati alle stesse
+  selezioni. Aprire un dettaglio non modifica più la selezione.
+- Applicato sempre il filtro per ID prima dell'esportazione. Se mancano ID
+  selezionati o risultati espliciti non vengono recuperati altri esami dal DB.
+  Il cambio filtro mantiene i sottoinsiemi esistenti senza includere nuovi ID.
+- Conservate le scelte esplicite di reinvio e la validazione degli esami con
+  sostanze: gli esami incompleti vengono esclusi, senza aggiungere sostanze.
+- File modificati per questa attività:
+  - `src/gui/master_detail.py`: inizializzazione, conteggi e filtro obbligatorio.
+  - `src/exporter.py`: eliminazione del ripiego implicito sui risultati del DB.
+  - `tests/test_selective_export.py`: regressioni sul percorso GUI → CSV → stati,
+    più campioni con selezioni diverse, zero test, selezioni assenti, campioni
+    esclusi, reinvio selettivo, nuovi risultati e conservazione al cambio filtro.
+  - `manuale.md`, `PROJECT_CONTEXT.md`, `SESSION_SUMMARY.md`: comportamento
+    aggiornato e chiusura del TODO relativo ai dettagli mai aperti.
+- Collaudo eseguito esclusivamente su database e file temporanei, senza usare
+  campioni o cartelle operative. Popup intercettati nei test per evitare attese.
+- Suite completa: **122 test superati in 44,96 secondi**, compresi 10 nuovi casi
+  di regressione; verificati anche merge, sostanze, driver, GUI e trasferimento.
+  `git diff --check` senza errori di spaziatura.
+- Comando riproducibile (ambiente già sincronizzato):
+  ```powershell
+  $env:TMP = Join-Path (Get-Location) '.pytest-selection-uvtmp'
+  $env:TEMP = $env:TMP
+  New-Item -ItemType Directory -Path $env:TMP -Force | Out-Null
+  uv --offline --no-cache run --no-sync python -m pytest -q -p no:cacheprovider --basetemp=.pytest-selection-full --tb=short
+  ```
+### Issues and Solutions
+- La selezione dei singoli test veniva inizializzata soltanto aprendo il dettaglio;
+  il gestore export caricava tutti i risultati per i campioni senza selezione
+  inizializzata. La selezione ora esiste prima di mostrare i dettagli e viene
+  applicata senza eccezioni all'invio.
+- I campioni completamente esportati mostravano conteggi/spunte incoerenti:
+  adesso partono da zero test selezionati e richiedono una scelta esplicita di
+  reinvio. I comandi che selezionano tutti i test restano disponibili.
+
+## Driver Agilent 5977C — 2026-10-15
+### Decisions and Activities
+- Analizzati tracciato, driver, validatore, servizio e transcodifiche esame/sostanza.
+  Concordati controlli ignorati, prima occorrenza utile, rimozione Results,
+  non numerici a zero e importazione parziale per sole anomalie di larghezza riga.
+- Aggiunti driver registrato, `ParsedBatch` e adattatore `parse_batch`, prefissi
+  passati dal servizio, avvisi per righe scartate e messaggi dei file di soli CQ.
+- Aggiornate impostazioni, riepilogo importazione e documentazione operativa.
+  Modifiche preesistenti preservate; nessuna transcodifica reale precaricata,
+  nessun accesso al database operativo per il collaudo.
+- Inclusa la scheda Agilent nell'elenco positivo di `trasfer.py` e verificata
+  la sua presenza nello ZIP, senza includere dati campione nel trasferimento.
+- Verifica dedicata: **30 test superati in 4,29 secondi**. Verifica finale completa:
+  **112 test superati in 33,90 secondi**, compresi GUI e trasferimento.
+  Esempio: 4 campioni, 9 risultati ciascuno, cloroformio della prima occorrenza
+  `0,6568`; verificati anche export standard/sostanze e merge dopo esportazione.
+- Comando finale riproducibile (PowerShell, ambiente già sincronizzato):
+  ```powershell
+  $env:TMP = Join-Path (Get-Location) '.pytest-agilent-uvtmp'
+  $env:TEMP = $env:TMP
+  New-Item -ItemType Directory -Path $env:TMP -Force | Out-Null
+  uv --offline --no-cache run --no-sync python -m pytest -q -p no:cacheprovider --basetemp=.pytest-agilent-final --tb=short
+  ```
+- File modificati per questa attività:
+  - `driver.py`, `src/models.py`: driver, esito batch e adattatore retrocompatibile.
+  - `src/importer_service.py`: prefissi configurati, avvisi e archiviazione dei soli CQ.
+  - `src/gui/master_detail.py`, `src/gui/settings_dialog.py`: messaggi di importazione
+    e descrizione/selezione del nuovo strumento.
+  - `tests/test_agilent.py`: 30 test di parsing, integrazione, regressione e riepilogo.
+  - `trasfer.py`, `tests/test_transfer.py`: inclusione e verifica della scheda nello ZIP.
+  - `driver_implementati/agilent_5977c.md`, `driver_implementati/README.md`,
+    `manuale.md`, `PROJECT_CONTEXT.md`, `SESSION_SUMMARY.md`: regole operative,
+    architettura e risultati del collaudo.
+### Issues and Solutions
+- Il nome chimico `1,2-dicloroetano` richiede un parser CSV, non split sulla virgola.
+  Usato `csv.reader(strict=True)` e completata la lettura prima di salvare dati:
+  errori CSV anche tardivi annullano l'intera acquisizione.
+- Un batch vuoto può essere un report valido di soli controlli: distinto con
+  `archive_if_empty`; se restano solo righe campione irregolari il file va in errori.
+- uv non riusciva a salvare i file temporanei nella directory della sandbox:
+  impostati TMP e TEMP solo nel processo di test su una cartella ignorata del progetto.
+- La whitelist di trasferimento è stata aggiornata mentre la prima suite era in
+  esecuzione: il worker figlio vedeva la nuova lista, la fixture padre la precedente.
+  Ripetuta l'intera suite a sorgenti stabili: tutti i 112 test superati.
+
+## Esami LIS con sostanze — 2026-10-12
+### Decisions and Activities
+- Attuato il piano concordato: codice sostanza facoltativo nelle transcodifiche e
+  snapshot nei risultati. Nomi strumentali distinti, codici alfanumerici come testo,
+  migrazione SQLite ripetibile e coppie esame/sostanza univoche fra regole attive.
+- Conservati driver, formato CSV e comportamento standard. Per le sostanze,
+  TIPO ESAME conserva l'esame, SOSTANZA contiene il codice esito, VALORE SOSTANZA
+  contiene il risultato e VALORE resta vuoto.
+- Completezza controllata prima della scrittura rispetto al catalogo attivo corrente:
+  spunte individuali, esclusione dell'intero esame incompleto, riepilogo e audit;
+  esportazione degli altri esami e aggiornamento dei soli risultati scritti.
+- Modifiche alle regole applicate tramite nuove importazioni o reimportazioni;
+  rettifiche con stato conservato e reinvio manuale dell'esame completo.
+- Esteso il TXT con terzo campo facoltativo e importazione atomica. Aggiunti campi
+  in impostazioni e dettaglio; modifica per ID dal DB per conservare gli zeri iniziali.
+- Aggiornati manuale, specifiche e contesto; preservate tutte le modifiche precedenti.
+- Verifica finale: **82 test superati in 29,87 secondi**, inclusi 25 nuovi test
+  sulle sostanze e i controlli di conservazione delle regole nel trasferimento.
+  Comando: `uv --offline --no-cache run --no-sync python -m pytest -q
+  -p no:cacheprovider --basetemp=.pytest-sostanze-full-final --tb=short`.
+  Esecuzione con Python 3.12/Windows e runtime Tcl/Tk locale; soltanto database
+  sintetici, nessuna apertura o modifica del database operativo.
+- File modificati per questa funzionalità:
+  - `src/models.py`, `src/database.py`, `src/importer_service.py`: campo sostanza,
+    migrazione, validazione, transcodifiche TXT atomiche e snapshot dei risultati.
+  - `src/exporter.py`: controllo completezza, tracciato, audit delle esclusioni e
+    aggiornamento dei soli risultati scritti, anche per chiamanti senza ID risultato.
+  - `src/gui/settings_dialog.py`, `src/gui/master_detail.py`: configurazione e
+    visualizzazione dei codici, conservazione zeri nei dialoghi e riepilogo corretto.
+  - `tests/test_substances.py`, `tests/test_transfer.py`: regressioni dei nuovi
+    comportamenti, conservazione dei codici nel trasferimento e isolamento GUI.
+  - `manuale.md`, `progetto.md`, `PROJECT_CONTEXT.md`, `SESSION_SUMMARY.md`:
+    istruzioni operative, specifiche, architettura e risultati della verifica.
+### Issues and Solutions
+- Il CSV di riferimento contiene un BOM UTF-8: lettura del fixture con utf-8-sig.
+- Risultati del driver senza ID: risolte corrispondenze univoche con il DB, evitando
+  di marcare l'intero campione quando un suo esame viene escluso dall'export.
+- Durante il collaudo combinato si sono verificati arresti nativi Tcl/Tk nel worker
+  di trasferimento e nella creazione di una successiva finestra principale. Il test
+  del worker passava isolatamente. Eseguiti il nuovo test dei dialoghi e quello del
+  worker in sottoprocessi dedicati, mantenendo i controlli su widget e worker reali:
+  la suite completa è poi passata senza arresti. Nessuna modifica al runtime GUI
+  applicativo per aggirare il problema del ciclo di vita degli interpreti nei test.
+
+## Icona applicazione — 2026-10-12
+### Decisions and Activities
+- Collegato `strumenti.ico` alla finestra principale e ai dialoghi figli;
+  percorso indipendente dalla directory di avvio e fallback per Linux/macOS.
+- Incluso l'asset nell'elenco positivo del pacchetto di trasferimento.
+- Verifica del caricamento ICO in una finestra CustomTkinter temporanea senza
+  database operativo; test del trasferimento: 12 superati.
+### Issues and Solutions
+- CustomTkinter imposta un'icona propria dopo l'avvio: la chiamata pubblica
+  `iconbitmap` impedisce la sovrascrittura su Windows.
+- Se l'asset manca o non è leggibile, viene emesso un warning senza bloccare la GUI.
+
+## Pacchetto di trasferimento senza campioni — 2026-10-06
+### Decisions and Activities
+- Aggiunti `trasfer.py` con interfaccia ttk e `transfer.bat`; ZIP con elenco
+  esplicito di sorgenti, help, licenza e configurazione runtime.
+- Confermati Windows x64, installazione tramite Internet e conservazione di
+  utenti, impostazioni e transcodifiche; esclusi campioni, risultati e tutti gli audit.
+- Backup SQLite tramite API, cancellazioni soltanto nella copia, reset dei
+  contatori e dei quattro percorsi, VACUUM e controlli integrità/foreign key.
+- Generati installer e launcher dedicati: uv 0.12.14 e Python 3.12.13 locali,
+  sync bloccato senza sviluppo e successivi avvii offline senza sincronizzazione.
+- Riscritta la guida transfer.md; aggiornati README, contesto e ignore degli ZIP.
+### Issues and Solutions
+- Copiare direttamente SQLite potrebbe perdere transazioni nel WAL: usata Backup API.
+- La sola cancellazione lascia dati nelle pagine libere: la copia viene ricostruita
+  con VACUUM e non vengono inclusi WAL, SHM o file operativi.
+- I percorsi assoluti della sorgente non valgono sulla nuova postazione: rimossi
+  soltanto dalla copia, poi ricreati dal seed applicativo esistente al primo avvio.
+- Le note pregresse in PROJECT_CONTEXT.md e SESSION_SUMMARY.md sono state conservate.
+- Il bootstrap Windows PowerShell inizialmente caricava moduli incompatibili
+  ereditati da PowerShell 7: nel BAT generato PSModulePath viene limitato ai moduli
+  standard Windows, soltanto per quel processo.
+- Verifica: suite completa **57 test superati**; dopo la correzione del bootstrap
+  rieseguiti i **12 test di trasferimento**, tutti superati. Comandi tramite
+  `uv run --no-sync --offline --cache-dir .uv-cache python -m pytest`, con database
+  sintetici e basetemp locale. I test grafici hanno richiesto accesso al Tcl/Tk
+  locale fuori dalla sandbox; nessun dato operativo usato.
+- Eseguito realmente installa.bat nella cartella estratta di prova: scaricati uv
+  e Python locali, installate quattro dipendenze runtime, Tk verificato. Successivo
+  avvio offline dell'entrypoint reale con runtime isolato, account e help verificati;
+  assenza di pytest nel nuovo ambiente. Il collaudo non è stato eseguito su un PC
+  fisicamente distinto privo di Python.
+- `git diff --check` e compilazione di trasfer.py superati.
+
 ## Aggiornamento transfer.md — 2026-10-06
 ### Decisions and Activities
 - Revisionato integralmente [transfer.md](file:///d:/pyprg/strumenti/transfer.md) per guidare il trasferimento del software su postazioni Windows prive di Python.

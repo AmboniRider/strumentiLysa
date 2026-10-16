@@ -1,6 +1,7 @@
 """Test per la selezione selettiva dei test/parametri per singolo campione."""
 
 from pathlib import Path
+import csv
 import customtkinter as ctk
 import pytest
 
@@ -8,6 +9,202 @@ from src.database import Database
 from src.exporter import LISExporter
 from src.gui.master_detail import MasterDetailView
 from src.models import ParsedResult, SampleRecord, UserRecord
+
+
+def save_selection_sample(db: Database, number: int) -> SampleRecord:
+    """Crea tre esami distinguibili su un campione in un database temporaneo."""
+    sample = SampleRecord(
+        id=None, sample_code=f"BG260010442001{number:04d}", lab_code="BG",
+        year=2026, acceptance="10442", conferment=1, sample_number=number,
+        source_filename="selection.txt",
+    )
+    results = [
+        ParsedResult(param_name=f"Esame {n}", raw_value=str(n), numeric_value=float(n),
+                     formatted_value=str(n), lis_exam_code=f"TEST{n}", is_mapped=True)
+        for n in range(1, 4)
+    ]
+    ok, _, sample_id = db.save_sample_with_results(sample, results)
+    assert ok and sample_id is not None
+    saved = db.get_sample_with_results(sample_id)
+    assert saved is not None
+    return saved
+
+
+def exported_pairs(directory: Path) -> set[tuple[str, str]]:
+    """Legge il CSV effettivo per confrontare insieme campione ed esame."""
+    files = list(directory.glob("*.csv"))
+    assert len(files) == 1
+    with files[0].open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream, delimiter=";"))
+    pairs = [(row["CODICE CAMPIONE"], row["TIPO ESAME"]) for row in rows]
+    assert len(pairs) == len(set(pairs)), "Nessun esame deve essere duplicato"
+    return set(pairs)
+
+
+@pytest.fixture
+def export_messages(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[str]]:
+    """Intercetta solo i popup: esportatore, database e widget restano reali."""
+    messages: dict[str, list[str]] = {"showinfo": [], "showwarning": [], "showerror": []}
+    for method, bucket in messages.items():
+        monkeypatch.setattr(f"src.gui.master_detail.messagebox.{method}",
+                            lambda title, text, _bucket=bucket, **kwargs: _bucket.append(text))
+    return messages
+
+
+def test_gui_export_unopened_details_only_pending(
+    test_db: Database, admin_user: UserRecord, ctk_root: ctk.CTk,
+    tmp_path: Path, export_messages: dict[str, list[str]],
+):
+    """Anche i campioni mai aperti devono inviare soltanto i test pendenti."""
+    samples = [save_selection_sample(test_db, n) for n in range(1, 4)]
+    for sample in samples:
+        test_db.mark_results_as_exported([sample.results[0].id], [sample.id], "previous.csv")
+    out_dir = tmp_path / "export"
+    test_db.save_config_value("path_export", str(out_dir))
+    view = MasterDetailView(ctk_root, test_db, admin_user, lambda: None)
+    try:
+        # Solo il primo dettaglio viene aperto automaticamente dal caricamento.
+        view._handle_export_selected()
+        assert not export_messages["showerror"]
+        assert exported_pairs(out_dir) == {
+            (sample.sample_code, code) for sample in samples for code in ("TEST2", "TEST3")
+        }
+    finally:
+        view.destroy()
+
+
+@pytest.mark.parametrize("refresh", [False, True])
+def test_gui_export_multiple_partial_samples(
+    test_db: Database, admin_user: UserRecord, ctk_root: ctk.CTk, tmp_path: Path,
+    export_messages: dict[str, list[str]], refresh: bool,
+):
+    """Verifica CSV e stati con selezioni diverse, zero test e un campione escluso."""
+    first, second, empty, excluded = [save_selection_sample(test_db, n) for n in range(1, 5)]
+    out_dir = tmp_path / "export"
+    test_db.save_config_value("path_export", str(out_dir))
+    view = MasterDetailView(ctk_root, test_db, admin_user, lambda: None)
+    try:
+        view._display_sample_detail(first)
+        view._toggle_test_selection(first.results[1].id)
+        view._display_sample_detail(second)
+        view._deselect_all_tests_current_sample()
+        view._toggle_test_selection(second.results[1].id)
+        # La selezione globale dei campioni deve conservare i sottoinsiemi esistenti.
+        view._deselect_all_visible()
+        view._select_all_visible()
+        view._display_sample_detail(empty)
+        view._deselect_all_tests_current_sample()
+        view._toggle_sample_selection(excluded.id)
+        if refresh:
+            view._on_filter_changed()
+        view._handle_export_selected()
+        assert not export_messages["showerror"]
+        assert exported_pairs(out_dir) == {
+            (first.sample_code, "TEST1"), (first.sample_code, "TEST3"),
+            (second.sample_code, "TEST2"),
+        }
+        for sample, expected in ((first, [True, False, True]), (second, [False, True, False]),
+                                 (empty, [False] * 3), (excluded, [False] * 3)):
+            saved = test_db.get_sample_with_results(sample.id)
+            assert saved.status == "DA_ESPORTARE"
+            assert [r.is_exported for r in saved.results] == expected
+    finally:
+        view.destroy()
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_gui_export_without_test_selection_creates_no_file(
+    test_db: Database, admin_user: UserRecord, ctk_root: ctk.CTk, tmp_path: Path,
+    export_messages: dict[str, list[str]], missing: bool,
+):
+    """Una selezione mancante non autorizza il caricamento di tutti gli esami."""
+    sample = save_selection_sample(test_db, 1)
+    out_dir = tmp_path / "export"
+    test_db.save_config_value("path_export", str(out_dir))
+    view = MasterDetailView(ctk_root, test_db, admin_user, lambda: None)
+    try:
+        if missing:
+            view.selected_tests_by_sample.clear()
+        else:
+            # Anche con il campione ancora spuntato, zero test significa zero righe.
+            view.selected_tests_by_sample[sample.id] = set()
+        view._handle_export_selected()
+        assert export_messages["showwarning"]
+        assert not list(out_dir.glob("*.csv"))
+        assert all(not r.is_exported for r in test_db.get_sample_results(sample.id))
+    finally:
+        view.destroy()
+
+
+def test_gui_exported_samples_start_with_zero_selected_tests(
+    test_db: Database, admin_user: UserRecord, ctk_root: ctk.CTk,
+    tmp_path: Path, export_messages: dict[str, list[str]],
+):
+    """Il conteggio e le spunte degli esportati devono coincidere anche senza dettaglio."""
+    samples = [save_selection_sample(test_db, n) for n in (1, 2)]
+    for sample in samples:
+        test_db.mark_results_as_exported([r.id for r in sample.results], [sample.id], "previous.csv")
+    out_dir = tmp_path / "export"
+    test_db.save_config_value("path_export", str(out_dir))
+    view = MasterDetailView(ctk_root, test_db, admin_user, lambda: None)
+    try:
+        view.combo_status.set("Tutti")
+        view._load_samples()
+        assert not view.selected_sample_ids
+        for sample in samples:
+            assert view.selected_tests_by_sample[sample.id] == set()
+            assert view.tree_master.item(str(sample.id))["values"][7] == "0/3"
+        # Il reinvio completo rimane disponibile come scelta esplicita.
+        view._display_sample_detail(samples[0])
+        view._select_all_tests_current_sample()
+        assert len(view.selected_tests_by_sample[samples[0].id]) == 3
+        assert view.selected_sample_ids == {samples[0].id}
+        view._deselect_all_tests_current_sample()
+        view._toggle_test_selection(samples[0].results[1].id)
+        view._handle_export_selected()
+        assert not export_messages["showerror"]
+        assert exported_pairs(out_dir) == {(samples[0].sample_code, "TEST2")}
+    finally:
+        view.destroy()
+
+
+@pytest.mark.parametrize("selection", [[], None])
+def test_exporter_never_loads_unselected_results(
+    test_db: Database, tmp_path: Path, selection: list[ParsedResult] | None,
+):
+    """Nessun ripiego sul DB quando il chiamante non fornisce esami selezionati."""
+    sample = save_selection_sample(test_db, 1)
+    sample.results = selection
+    ok, _, path, count = LISExporter(test_db).export_samples([sample], tmp_path, "empty.csv")
+    assert not ok and count == 0 and not path.exists()
+    assert all(not r.is_exported for r in test_db.get_sample_results(sample.id))
+
+
+@pytest.mark.parametrize("refresh", [False, True])
+def test_gui_new_results_do_not_expand_existing_selection(
+    test_db: Database, admin_user: UserRecord, ctk_root: ctk.CTk, tmp_path: Path,
+    export_messages: dict[str, list[str]], refresh: bool,
+):
+    """Un risultato acquisito dopo la selezione richiede una nuova spunta esplicita."""
+    sample = save_selection_sample(test_db, 1)
+    out_dir = tmp_path / "export"
+    test_db.save_config_value("path_export", str(out_dir))
+    view = MasterDetailView(ctk_root, test_db, admin_user, lambda: None)
+    try:
+        view._deselect_all_tests_current_sample()
+        view._toggle_test_selection(sample.results[0].id)
+        # Simula un'acquisizione fra preparazione e invio senza toccare la selezione.
+        extra = ParsedResult(param_name="Nuovo", raw_value="4", numeric_value=4,
+                             formatted_value="4", lis_exam_code="TEST4", is_mapped=True)
+        assert test_db.save_sample_with_results(sample, [extra], merge=True)[0]
+        if refresh:
+            view._on_filter_changed()
+        view._handle_export_selected()
+        assert not export_messages["showerror"]
+        assert exported_pairs(out_dir) == {(sample.sample_code, "TEST1")}
+        assert [r.is_exported for r in test_db.get_sample_results(sample.id)] == [True, False, False, False]
+    finally:
+        view.destroy()
 
 
 @pytest.fixture

@@ -40,3 +40,7 @@ dist/
 Thumbs.db
 Desktop.ini
 *.log
+
+# Pacchetti di trasferimento e relativo staging temporaneo.
+strumenti_transfer_*.zip
+.transfer-*/
