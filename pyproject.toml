@@ -1,7 +1,8 @@
 [project]
 name = "strumenti-lis"
-version = "1.1.0"
+version = "2.0.0"
 description = "Interfaccia tra file strumenti di laboratorio e LIS"
+authors = [{ name = "Amboni Paolo A." }]
 readme = "progetto.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }

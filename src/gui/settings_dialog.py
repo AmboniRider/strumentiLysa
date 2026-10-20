@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+# Author: Amboni Paolo A.
 # Copyright (C) 2026 Strumenti-LIS Contributors
 # Distributed under the terms of the GNU Affero General Public License v3 or later.
 
@@ -28,6 +29,7 @@ from src.gui.theme import (
     FONT_TITLE,
 )
 from src.models import SampleRecord
+from src.gui.update_dialog import UpdateController, UpdateDialog
 from driver import get_available_driver_names
 
 
@@ -80,6 +82,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
         lbl_title = ctk.CTkLabel(header_frame, text="⚙️ Impostazioni e Configurazione", font=FONT_TITLE)
         lbl_title.pack(side="left")
+        ctk.CTkButton(header_frame, text="Aggiornamenti e backup", command=self._open_updates).pack(side="right")
 
         # Tabview
         self.tabview = ctk.CTkTabview(self, corner_radius=10)
@@ -105,6 +108,12 @@ class SettingsDialog(ctk.CTkToplevel):
     # =========================================================================
     # TAB: DRIVER STRUMENTO PREDEFINITO
     # =========================================================================
+    def _open_updates(self) -> None:
+        """Apre la manutenzione software senza aggiungere una settima scheda."""
+        if not hasattr(self.master, "update_controller"):
+            self.master.update_controller = UpdateController(self.master)
+        UpdateDialog(self, self.db, self.master.update_controller)
+
     def _build_tab_driver(self, tab: ctk.CTkFrame) -> None:
         config = self.db.get_config()
         available_drivers = get_available_driver_names()
@@ -286,26 +295,9 @@ class SettingsDialog(ctk.CTkToplevel):
         row_v = ctk.CTkFrame(card_version, fg_color="transparent")
         row_v.pack(fill="x", padx=20, pady=(0, 12))
 
-        self.entry_version = ctk.CTkEntry(
-            row_v,
-            font=FONT_NORMAL,
-            width=200,
-            height=34
-        )
-        self.entry_version.insert(0, config.app_version)
-        self.entry_version.pack(side="left", padx=(0, 12))
-
-        btn_save_version = ctk.CTkButton(
-            row_v,
-            text="💾 Salva Versione",
-            font=FONT_SMALL,
-            fg_color=COLOR_PRIMARY,
-            hover_color=COLOR_PRIMARY_HOVER,
-            height=34,
-            width=130,
-            command=self._save_version
-        )
-        btn_save_version.pack(side="left")
+        self.version_label = ctk.CTkLabel(row_v, text=DEFAULT_APP_VERSION, font=FONT_NORMAL)
+        self.version_label.pack(side="left", padx=(0, 12))
+        ctk.CTkLabel(row_v, text="Gestita dalle Release del programma", font=FONT_SMALL).pack(side="left")
 
     def _create_path_row(self, parent: ctk.CTkFrame, label: str, default_val: str, row: int) -> ctk.CTkEntry:
         ctk.CTkLabel(parent, text=label, font=FONT_NORMAL).grid(row=row*2, column=0, sticky="w", pady=(8, 2))
@@ -345,36 +337,6 @@ class SettingsDialog(ctk.CTkToplevel):
         if self.on_config_changed:
             self.on_config_changed()
         messagebox.showinfo("Configurazione", "Percorsi cartelle salvati con successo!", parent=self)
-
-    def _save_version(self) -> None:
-        """Salva la nuova versione dell'applicazione e aggiorna l'interfaccia."""
-        new_version = self.entry_version.get().strip()
-        if not new_version:
-            messagebox.showwarning(
-                "Versione non valida",
-                "Il campo della versione non può essere lasciato vuoto.",
-                parent=self
-            )
-            return
-
-        self.db.save_config_value("app_version", new_version, "Versione del software dell'applicazione")
-        curr_user = SessionManager.get_user()
-        self.db.log_action(
-            curr_user.id if curr_user else None,
-            curr_user.username if curr_user else "admin",
-            "CONFIG_VERSION_UPDATE",
-            f"Versione aggiornata a: {new_version}"
-        )
-
-        if self.on_config_changed:
-            self.on_config_changed()
-
-        messagebox.showinfo(
-            "Versione Aggiornata",
-            f"La versione del software è stata aggiornata a:\n\n'Versione {new_version}'\n\n"
-            f"Il titolo della finestra principale è stato aggiornato.",
-            parent=self
-        )
 
     # =========================================================================
     # TAB 2: TRANSCODIFICHE LIS

@@ -1,6 +1,9 @@
 """Test unitari per il modulo database.py."""
 
 from pathlib import Path
+import pytest
+
+from src.auth import verify_password
 from src.database import Database
 from src.models import ParsedResult, SampleFilter, SampleRecord
 
@@ -13,6 +16,7 @@ def test_database_init_and_seed(tmp_path: Path):
     admin = db.get_user_by_username("admin")
     assert admin is not None
     assert admin.role == "ADMIN"
+    assert verify_password("admin", admin.password_hash, admin.salt)
 
     # Verifica transcodifiche di default
     trans_map = db.get_transcoding_map()
@@ -29,6 +33,42 @@ def test_database_init_and_seed(tmp_path: Path):
     config_updated = db.get_config()
     assert config_updated.default_driver == "Spettrofotometro (UV-Vis / Assorbanza)"
 
+
+
+def test_missing_admin_is_created_with_existing_users(tmp_path: Path) -> None:
+    """Il bootstrap deve funzionare anche quando esistono già altri account."""
+    db_file = tmp_path / "existing.db"
+    db = Database(db_file)
+    assert db.add_user("operatore", "password-prova", "OPERATORE")[0]
+    operator = db.get_user_by_username("operatore")
+    # Solo il database sintetico viene predisposto senza admin.
+    with db.get_connection() as conn:
+        conn.execute("DELETE FROM users WHERE username = 'admin'")
+
+    reopened = Database(db_file)
+    admin = reopened.get_user_by_username("admin")
+    assert admin is not None and admin.role == "ADMIN"
+    assert verify_password("admin", admin.password_hash, admin.salt)
+    assert reopened.get_user_by_username("operatore") == operator
+
+
+@pytest.mark.parametrize("username", ["admin", "ADMIN"])
+def test_existing_admin_is_preserved_on_restart(tmp_path: Path, username: str) -> None:
+    """Riavviare non deve reimpostare password o ruolo di un account esistente."""
+    db_file = tmp_path / "restart.db"
+    db = Database(db_file)
+    admin = db.get_user_by_username("admin")
+    assert db.update_user_password(admin.id, "password-personalizzata")[0]
+    with db.get_connection() as conn:
+        conn.execute("UPDATE users SET username = ?, role = 'OPERATORE' WHERE id = ?", (username, admin.id))
+    before = db.get_user_by_username("admin")
+
+    for _ in range(2):
+        reopened = Database(db_file)
+        assert reopened.get_user_by_username("admin") == before
+        assert verify_password("password-personalizzata", before.password_hash, before.salt)
+        with reopened.get_connection() as conn:
+            assert conn.execute("SELECT COUNT(*) FROM users WHERE username = 'admin'").fetchone()[0] == 1
 
 
 def test_save_and_retrieve_sample(tmp_path: Path):

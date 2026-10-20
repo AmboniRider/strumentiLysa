@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+# Author: Amboni Paolo A.
 # Copyright (C) 2026 Strumenti-LIS Contributors
 # Distributed under the terms of the GNU Affero General Public License v3 or later.
 
@@ -13,6 +14,18 @@ from __future__ import annotations
 
 import os
 import sys
+
+# Il bootstrap usa solo la libreria standard: recupera il runtime prima che
+# import di terze parti o migrazioni possano aprire un'installazione incompleta.
+if __name__ == "__main__":
+    from pathlib import Path
+    from update_runner import bootstrap
+    try:
+        bootstrap(Path(__file__).resolve().parent)
+    except Exception as exc:
+        import tkinter.messagebox
+        tkinter.messagebox.showerror("Avvio non disponibile", str(exc))
+        raise SystemExit(1)
 
 # Forza l'output UTF-8 per supportare i caratteri grafici ANSI e Unicode su console Windows
 if hasattr(sys.stdout, "reconfigure"):

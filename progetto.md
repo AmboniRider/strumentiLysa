@@ -1,5 +1,7 @@
 # SPECIFICHE DI PROGETTO: INTERFACCIA STRUMENTI DI LABORATORIO - LIS
 
+**Autore:** Amboni Paolo A.
+
 ---
 
 ## 1. SCOPO E OBIETTIVI DEL PROGETTO
@@ -177,13 +179,29 @@ ANNO;ACCETTAZIONE;CONFERIMENTO;CAMPIONE;ALIQUOTA;UNITÀ CAMPIONARIA;N. RISULTATO
 
 ## 8. AUTENTICAZIONE E GESTIONE UTENTI
 
+### Aggiornamenti amministrativi e backup
+
+La versione effettiva è `src.__version__`, non modificabile dalle impostazioni.
+Il controllo asincrono delle Release GitHub stabili informa tutti gli utenti;
+solo ADMIN può installare da **Impostazioni → Aggiornamenti e backup** o avviare
+una copia completa verificata del database. L'installazione usa ZIP senza dati,
+manifest con compatibilità e checksum, processo esterno e rollback.
+Lo schema è versionato tramite `PRAGMA user_version` e migrazioni consecutive.
+La politica database è esplicita per Release: conservazione, migrazione senza
+perdita o nuovo DB con conferma, backup, esportazione dei canali e recupero di
+utenti, impostazioni e transcodifiche. Dettagli del protocollo: [UPDATES.md](UPDATES.md).
+
 ### 8.1 Modello di Sicurezza
 - Autenticazione basata su credenziali memorizzate su database SQLite.
 - Password salvate con hashing sicuro (SHA-256 con salt per ciascun utente).
-- Utente predefinito creato all'inizializzazione del database:
+- Utente predefinito creato all'avvio se manca l'account `admin`, anche se
+  esistono altri utenti (confronto senza distinzione di maiuscole/minuscole):
   - **Username**: `admin`
   - **Password**: `admin`
   - **Ruolo**: `Admin`
+- Se l'account esiste già, password e ruolo vengono conservati. Dopo il primo
+  accesso è possibile creare utenti in **Impostazioni → Gestione Utenti** e
+  cambiare la password iniziale tramite **Password**.
 
 ### 8.2 Ruoli e Permessi
 1. **Ruolo Admin**:

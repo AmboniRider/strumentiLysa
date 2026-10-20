@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+# Author: Amboni Paolo A.
 """Crea un pacchetto Windows installabile, senza storico dei campioni.
 
 Il motore usa solo la libreria standard ed è separato dalla GUI: esportare non
@@ -28,12 +29,14 @@ PYTHON_VERSION = "3.12.13"
 # Un elenco positivo evita di esportare nuovi file riservati aggiunti al progetto.
 RUNTIME_FILES = (
     "app.py", "driver.py", "pyproject.toml", "uv.lock", "LICENSE", "strumenti.ico",
-    "manuale.md", "progetto.md", "transfer.md",
+    "update_runner.py", "maintenance.py",
+    "manuale.md", "progetto.md", "transfer.md", "UPDATES.md", "LEGAL.md",
     "src/__init__.py", "src/auth.py", "src/config.py", "src/database.py",
     "src/exporter.py", "src/importer_service.py", "src/models.py", "src/validator.py",
     "src/gui/__init__.py", "src/gui/app_window.py", "src/gui/help_dialog.py",
     "src/gui/login_view.py", "src/gui/master_detail.py", "src/gui/password_dialog.py",
     "src/gui/settings_dialog.py", "src/gui/theme.py",
+    "src/backup.py", "src/update_service.py", "src/gui/update_dialog.py", "src/gui/license_dialog.py",
     "driver_implementati/README.md", "driver_implementati/dionex_ic.md",
     "driver_implementati/mettler_toledo.md", "driver_implementati/spettrofotometro_uv_vis.md",
     "driver_implementati/agilent_5977c.md",
@@ -121,6 +124,11 @@ echo =======================================================
 echo          STRUMENTI DI LABORATORIO - LIS
 echo =======================================================
 if not exist ".tools\uv.exe" goto missing
+rem Recupero con Python base: funziona anche con un ambiente virtuale interrotto.
+for /f "delims=" %%P in ('".tools\uv.exe" python find --managed-python ''' + PYTHON_VERSION + r'''') do set "RECOVERY_PYTHON=%%P"
+if not defined RECOVERY_PYTHON goto missing
+"%RECOVERY_PYTHON%" update_runner.py recover-only
+if errorlevel 1 goto failed
 if not exist ".venv\Scripts\python.exe" goto missing
 ".tools\uv.exe" run --no-sync --offline python app.py
 if errorlevel 1 goto failed

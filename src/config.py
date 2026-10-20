@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+# Author: Amboni Paolo A.
 # Copyright (C) 2026 Strumenti-LIS Contributors
 # Distributed under the terms of the GNU Affero General Public License v3 or later.
 
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, Set
+from src import __version__
 
 # Percorsi di base del progetto
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -28,7 +30,7 @@ DEFAULT_PATHS = {
 
 DEFAULT_LAB_CODES = "BG,MI,BS,RL,VP,MN,MB"
 DEFAULT_DRIVER_NAME = "Cromatografo Ionico (Dionex / IC)"
-DEFAULT_APP_VERSION = "1.1"
+DEFAULT_APP_VERSION = __version__
 
 # Transcodifiche iniziali di default
 DEFAULT_TRANSCODINGS: Dict[str, str] = {

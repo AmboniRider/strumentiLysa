@@ -6,7 +6,10 @@
 - `SessionManager` conserva il record utente solo in memoria; logout azzera il riferimento. Non sono implementati token di accesso/refresh, cookie, scadenza della sessione o revoca automatica al reset password/cambio ruolo.
 - Permessi `ADMIN`/`OPERATORE`: pulsanti e dialogo impostazioni protetti nella GUI; eliminazione campioni esportati protetta anche nel database. I metodi CRUD utenti non verificano autonomamente il ruolo del chiamante.
 - Autenticazione GitHub separata: `sync.bat` delega a Git e al metodo di autenticazione configurato sulla postazione; non gestisce token applicativi o segreti propri. Database e file di credenziali comuni sono esclusi da Git.
-- **TODO da valutare**: sostituire SHA-256 singolo con una funzione dedicata alle password; rimuovere il bootstrap con credenziale predefinita pubblica; uniformare validazione password e gestione spazi; centralizzare i permessi e l'aggiornamento/revoca delle sessioni; impedire anche la declassazione dell'ultimo amministratore.
+- **TODO da valutare**: sostituire SHA-256 singolo con una funzione dedicata alle password; uniformare validazione password e gestione spazi; centralizzare i permessi e l'aggiornamento/revoca delle sessioni; impedire anche la declassazione dell'ultimo amministratore.
+- Bootstrap concordato: a ogni inizializzazione, se manca il nome utente `admin`
+  (confronto NOCASE), crearlo con password `admin` e ruolo `ADMIN`, anche con
+  altri account presenti. Non reimpostare password o ruolo di account esistenti.
 
 ## Project Goal
 Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cromatografo Ionico Dionex / IC e futuri strumenti) e il LIS (Laboratory Information System). Il software acquisisce file di testo generati dagli strumenti, normalizza e transcodifica i parametri, li persiste su SQLite locale e consente all'operatore di selezionare ed esportare i campioni nel tracciato CSV standard richiesto dal LIS.
@@ -21,6 +24,24 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - **Licenza & Compatibilità**: Pienamente compatibile con GNU AGPLv3 (tutte le dipendenze esterne dirette e indirette adottano licenze permissive compatibili: MIT, BSD-3-Clause, BSD-2-Clause, Apache-2.0, HPND/MIT-CMU, PSF License; codice sorgente interno 100% originale privo di componenti proprietari terzi).
 
 ## Main Components
+- `LEGAL.md` / `src/gui/license_dialog.py`: disclaimer completo, attribuzione
+  all'autore Amboni Paolo A., repository pubblico e testo integrale `LICENSE`.
+  Menu principale accessibile anche prima del login e a entrambi i ruoli;
+  consultazione offline in sola lettura. I documenti sono inclusi nei pacchetti.
+- `src/update_service.py`: controllo Release pubbliche, confronto versioni,
+  contratto manifest, whitelist runtime, checksum e download isolato.
+- `src/backup.py`: copia SQLite completa, inclusi dati WAL committati, nome
+  univoco e verifiche d'integrità/chiavi esterne, senza modifica del sorgente.
+- `src/gui/update_dialog.py`: polling Tk e worker di rete/backup; popup a tutti,
+  azioni di installazione e backup riservate ad ADMIN nelle Impostazioni.
+- `update_runner.py`: bootstrap standard-library con lock di istanza, journal
+  prima delle scritture, installazione esterna, rollback di file/ambiente/database
+  e recupero all'avvio prima degli import applicativi.
+- `maintenance.py`: migrazione su copia, nuovo database con recupero completo
+  della configurazione e collaudo nascosto del vero avvio GUI.
+- `build_release.py` / `.github/workflows/release.yml`: ZIP aggiornamento senza
+  database e manifest formato 1; verifica su Windows e creazione di bozza Release
+  da tag stabile. `UPDATES.md` descrive adozione, backup e pubblicazione.
 - `driver.py`: include `Agilent5977CDriver`, CSV tabulare multi-campione riconosciuto
   dal contenuto; prima riga utile per codice e controlli esclusi tramite validatore.
 - `ParsedBatch` in `src/models.py`: campioni, avvisi di riga e archiviazione vuota;
@@ -53,6 +74,20 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - `driver_implementati/`: Documentazione tecnico-operativa approfondita per ciascun driver implementato ([README.md](file:///d:/pyprg/strumenti/driver_implementati/README.md), [dionex_ic.md](file:///d:/pyprg/strumenti/driver_implementati/dionex_ic.md), [mettler_toledo.md](file:///d:/pyprg/strumenti/driver_implementati/mettler_toledo.md), [spettrofotometro_uv_vis.md](file:///d:/pyprg/strumenti/driver_implementati/spettrofotometro_uv_vis.md)).
 
 ## Development Conventions
+- Attribuzione del software: `src.__author__ = "Amboni Paolo A."`, metadati
+  PEP 621 e intestazioni dei sorgenti. Il copyright FSF nel testo `LICENSE`
+  resta intatto. Testo del disclaimer identico fra README e `LEGAL.md`.
+- Versione reale unica in `src.__version__`, allineata a pyproject e lockfile;
+  `config.app_version` restituisce la versione compilata, ignorando il vecchio
+  valore modificabile nel database. GUI in sola lettura.
+- Schema SQLite in `PRAGMA user_version`: migrazioni consecutive transazionali,
+  prima migrazione 0→1; database futuro rifiutato prima delle scritture.
+- Updater: formato manifest 1, Release stabili pubbliche dello stesso repository,
+  nessun Git o token nelle postazioni distribuite. Mai sovrascrivere dati con ZIP
+  di trasferimento; aggiornamenti e trasferimenti hanno pacchetti distinti.
+- Ogni aggiornamento conserva backup DB, TXT transcodifiche e vecchio runtime
+  fino ai controlli d'avvio. Nuovo DB solo con consenso specifico, perdendo solo
+  campioni/risultati/audit e recuperando configurazione compatibile.
 - Eliminazione utenti: preservare eventi, nomi, dettagli e timestamp dell'audit.
   Azzerare il riferimento nullable all'account e cancellarlo nella stessa
   transazione; rollback completo e messaggio applicativo se un vincolo o un
@@ -91,6 +126,10 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - Visualizzazione predefinita con filtro di stato 'Da Esportare' e periodo dell'ultimo mese per mostrare prioritariamente i campioni pendenti da processare, con selettori rapidi per consultare gli esportati o l'intero storico.
 
 ## Technical Constraints
+- Windows x64 per installazione automatica; aggiornamenti richiedono Internet,
+  uso ordinario disponibile offline. Nessun dato operativo caricato su GitHub.
+- Una sola istanza per cartella; installazione automatica disabilitata quando
+  esiste `.git`. Backup e staging sono esclusi dal repository e dai pacchetti.
 - Il pacchetto trasferito richiede Internet per installazione/ripristino; uv,
   Python e cache sono locali alla cartella estratta. L'esecuzione avviene offline.
 - Il trasferimento conserva utenti, impostazioni e transcodifiche. I quattro
@@ -100,6 +139,30 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - Nessuna perdita accidentale di dati originali (i file elaborati vengono archiviati, non cancellati).
 
 ## Current Status & Active TODO
+- **2026-10-20 — Major release 2.0.0**: versione effettiva, pyproject e lockfile
+  allineati a 2.0.0. Note di rilascio organizzate in gestione sostanze,
+  aggiornamenti, licenza/responsabilità, revisione UI e correzioni. Schema 1
+  conservato, migrazione 0→1 senza perdita: nessun database nuovo necessario.
+  Pubblicazione richiesta dall'utente tramite tag stabile e workflow Windows
+  che pubblica ZIP e manifest solo dopo test e build superati.
+- **2026-10-20 — Licenza e responsabilità**: aggiunta la frase sul supporto
+  operativo e sulla verifica autonoma dei risultati; autore nei metadati,
+  documentazione e sorgenti. Nuova voce nel menu principale con disclaimer,
+  repository e licenza integrale, disponibile per tutti senza accesso Internet.
+- **2026-10-20 — Disclaimer README**: aggiunto il testo richiesto dall'utente.
+  Riferimenti allineati alla licenza AGPLv3 o successiva (AGPL-3.0-or-later);
+  nessuna modifica alla licenza o all'architettura durante questa attività.
+- **2026-10-20 — Versione 1.2.0, aggiornamenti e backup**: motore, pannello ADMIN,
+  schema versionato, recupero d'emergenza, pacchetto Release e workflow implementati.
+  Il repository è ora pubblico. Nessuna pubblicazione Release eseguita in sessione;
+  la prima adozione su vecchie installazioni richiede sovrapporre manualmente il
+  solo pacchetto aggiornamento, preservando database e cartelle operative.
+  Collaudo finale: **174 test superati**, incluso aggiornamento Windows isolato
+  con uv reale, login/dashboard offline, rollback e lanciatore con runtime locale.
+- **2026-10-20 — Primo accesso**: il seed verifica l'assenza dell'account `admin`
+  anziché la tabella utenti vuota; controllo e creazione nella stessa transazione
+  `BEGIN IMMEDIATE`. Aggiornate le istruzioni di accesso in README, manuale,
+  specifiche e guida di trasferimento; aggiunte regressioni sui riavvii.
 - **2026-10-16 — Eliminazione utenti corretta**: riprodotto su copia reale il
   vincolo `audit_logs.user_id` che impediva la cancellazione. Corretto
   `Database.delete_user()` con conservazione dello storico, controlli protettivi
@@ -187,7 +250,8 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - **Active TODO**:
   - Test sul campo con campioni reali generati dagli strumenti di laboratorio.
   - Eventuale implementazione di driver per ulteriori tipologie di strumenti analitici in `driver.py`.
-  - Verificare l'aggiornamento del titolo/versione durante una sessione autenticata: `AppWindow.update_app_title()` reinizializza anche la vista e richiama `show_login()`. I test attuali verificano il titolo, ma non la permanenza nella dashboard durante questa operazione.
+  - Risolto nella 1.2.0: `AppWindow.update_app_title()` aggiorna soltanto il titolo,
+    senza richiamare il login o ricreare la vista; regressione verificata.
   - Allineare la guida `transfer.md`: contiene riferimenti a `transer.md` inesistente e un conteggio storico di 18 test, mentre la suite attuale comprende 45 test.
 
 ### Ricognizione del 2026-10-05

@@ -44,3 +44,8 @@ Desktop.ini
 # Pacchetti di trasferimento e relativo staging temporaneo.
 strumenti_transfer_*.zip
 .transfer-*/
+.updates/
+.app.lock
+.update.lock
+*.update
+*.restore

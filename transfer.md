@@ -30,7 +30,7 @@ Lo ZIP contiene una sola cartella `strumenti` con:
 | Informazioni del database | Trasferimento |
 | --- | --- |
 | Utenti, ruoli e credenziali applicative memorizzate | Conservati: usare gli account esistenti |
-| Transcodifiche e impostazioni, inclusa la versione visualizzata | Conservate |
+| Transcodifiche e impostazioni | Conservate; la versione visualizzata proviene dal programma |
 | Percorsi di input, archivio, errori ed export | Ricreati sotto la nuova cartella |
 | Campioni, risultati, storico e stati di esportazione | Esclusi |
 | Tutti i log di audit | Esclusi |
@@ -68,13 +68,19 @@ uv sync --locked --no-dev --no-install-project --python 3.12.13 --managed-python
 
 uv è in `.tools`, Python in `.runtime/python`, l'ambiente in `.venv` e la cache
 in `.uv-cache`, tutti nella cartella estratta. Si usano percorsi espliciti;
-Git e l'accesso al repository privato non sono necessari.
+Git e credenziali GitHub non sono necessari; il repository è pubblico.
 Riferimenti: [installer uv](https://docs.astral.sh/uv/reference/installer/)
 e [sincronizzazione bloccata](https://docs.astral.sh/uv/concepts/projects/sync/).
 
 ## 4. Primo avvio e uso successivo
 
-Accedere con un utente già presente sulla postazione sorgente e la relativa password.
+Se nel database trasferito è già presente l'account `admin`, accedere con la sua
+password attuale oppure con un altro utente già presente sulla postazione sorgente.
+Se l'account `admin` manca, al primo avvio viene creato automaticamente con ruolo
+**ADMIN**, **utente `admin` e password `admin`**, anche se sono presenti altri utenti.
+Usare **Impostazioni → Gestione Utenti** per creare nuovi account; è consigliato
+cambiare la password iniziale tramite **Password**. Le credenziali e il ruolo di
+un account `admin` esistente non vengono reimpostati agli avvii successivi.
 L'elenco campioni è vuoto. Al primo avvio i percorsi predefiniti vengono registrati
 nella nuova posizione: `sequenze`, `archiviati`, `errori`, `export`.
 Le cartelle vengono create quando necessarie; per utilizzare percorsi dello strumento
@@ -82,6 +88,13 @@ o del LIS differenti, configurarli nelle **Impostazioni** con un amministratore.
 Le personalizzazioni effettuate sul nuovo PC restano valide agli avvii successivi.
 
 Aprire **Guida** per consultare il [manuale operativo](manuale.md).
+L'amministratore dispone di **Impostazioni → Aggiornamenti e backup** per
+aggiornare dalle Release pubbliche e salvare copie complete del database.
+Il controllo all'avvio non blocca l'uso offline; l'installazione degli aggiornamenti
+richiede Internet. Gli aggiornamenti conservano normalmente i dati mediante
+migrazioni; un database nuovo richiede conferma della perdita dello storico,
+backup e salvataggio/recupero delle transcodifiche.
+Per dettagli e aggiornamento iniziale di vecchie installazioni: [UPDATES.md](UPDATES.md).
 Avviare sempre `strumenti.bat`, che usa `uv run --no-sync --offline python app.py`.
 
 Non spostare la cartella dopo l'installazione: l'ambiente virtuale e i percorsi

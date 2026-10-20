@@ -1,5 +1,7 @@
 # MANUALE D'USO — STRUMENTI ➔ LIS
 
+**Autore:** Amboni Paolo A.
+
 *Applicazione Desktop per l'Acquisizione, Normalizzazione ed Esportazione dei Dati Strumentali di Laboratorio verso il LIS*
 
 *Aggiornato il 5 ottobre 2026 in base al comportamento dell'applicazione.*
@@ -73,6 +75,59 @@ Questi percorsi possono essere modificati dall'Amministratore nelle Impostazioni
 ---
 
 ## 3. Interfaccia Grafica & Navigazione
+
+### Licenza e responsabilità
+
+La voce **Licenza e responsabilità** nel menu principale è disponibile prima
+del login e durante l'uso, sia per operatori sia per amministratori. La finestra
+riporta l'autore **Amboni Paolo A.**, l'indirizzo del repository GitHub,
+la licenza **AGPL-3.0-or-later** e il disclaimer completo, inclusa la necessità
+di verificare autonomamente i risultati prima dell'impiego professionale,
+tecnico, scientifico o decisionale.
+
+La seconda scheda contiene il testo integrale AGPLv3. I testi sono consultabili
+offline e copiabili, ma non modificabili. Il repository si apre nel browser solo
+premendo il relativo pulsante. Il disclaimer è riportato anche in [LEGAL.md](LEGAL.md).
+
+### Aggiornamenti e backup
+
+All'avvio il programma verifica in background se esiste una nuova Release
+stabile su GitHub. Un popup informa tutti gli utenti; gli operatori devono
+rivolgersi all'amministratore. Internet assente non impedisce l'utilizzo.
+
+L'amministratore trova **Aggiornamenti e backup** nelle **Impostazioni**:
+può verificare manualmente, leggere le novità, installare con riavvio e creare
+una copia completa datata del database in una cartella a scelta.
+
+Prima di aggiornare vengono indicati gli effetti sul database: conservazione,
+migrazione senza perdita oppure database nuovo. Quest'ultimo richiede una
+conferma specifica per la perdita di campioni, risultati e audit; utenti,
+impostazioni e transcodifiche compatibili vengono recuperati automaticamente.
+Il programma salva prima il database completo e i canali già codificati;
+il dialogo mostra la cartella `.updates/<identificativo>/`. In caso di necessità
+il file `transcodifiche.txt` si importa da **Transcodifiche LIS → Importa TXT**.
+Se l'aggiornamento fallisce, viene ripristinata l'installazione precedente.
+
+La versione software è mostrata in sola lettura e viene aggiornata con il codice.
+Le copie di sviluppo con Git usano il flusso Git per installare aggiornamenti.
+I backup restano sul PC e non vengono caricati su GitHub; i file strumentali
+esterni al database richiedono una copia separata.
+Istruzioni complete e prima adozione: [Aggiornamenti](UPDATES.md).
+
+### Primo accesso dopo l'installazione
+
+Al primo avvio il software crea automaticamente l'account `admin` con ruolo
+**ADMIN**, se questo nome utente non è già presente, anche in presenza di altri utenti.
+Le credenziali predefinite sono:
+
+- **Utente:** `admin`
+- **Password:** `admin`
+
+Dopo l'accesso, aprire **⚙️ Impostazioni → Gestione Utenti** per creare i nuovi
+utenti. È consigliato modificare la password iniziale con **🔑 Password**.
+Agli avvii successivi un account `admin` già presente mantiene password e ruolo:
+la password personalizzata non viene reimpostata. Il nome utente viene confrontato
+senza distinguere maiuscole e minuscole.
 
 L'interfaccia si suddivide in tre aree principali:
 

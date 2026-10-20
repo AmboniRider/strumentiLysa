@@ -1,5 +1,139 @@
 # SESSION SUMMARY
 
+## Pubblicazione major release 2.0.0 — 2026-10-20
+### Decisions and Activities
+- Richiesta esplicita di pubblicare la major 2.0 e sincronizzare tutte le
+  modifiche locali con GitHub sul ramo `main`, comprese le attività precedenti.
+- Versione 2.0.0 in `src.__version__`, pyproject e lockfile; test di installazione
+  reso indipendente dalla versione corrente per verificare davvero l'upgrade
+  da una copia sintetica 1.1.0 alla nuova versione.
+- Riscritte le note della major attorno alle cinque novità richieste: sostanze,
+  aggiornamenti, licenza, revisione interfaccia e bug fix. Chiarita la migrazione
+  senza perdita e l'assenza di necessità di scaricare un database nuovo.
+- Aggiornati README e guida aggiornamenti. Workflow da tag stabile impostato
+  per pubblicare la Release dopo test e build, come autorizzato dall'utente;
+  riferimenti delle Actions verificati sulle API ufficiali e fissati a SHA.
+### Issues and Solutions
+- GitHub CLI non installata localmente: pubblicazione tramite workflow GitHub
+  Actions, usando il token effimero della piattaforma senza salvare credenziali.
+- Verificati remoto e ramo: `origin/main` allineato prima della sincronizzazione,
+  nessuna Release preesistente al controllo iniziale.
+- Collaudo locale: **177 test funzionali superati** nella suite completa e
+  **test di installazione Windows superato in 12.81s** dopo aver aggiornato
+  il subprocess di verifica della versione corrente (178 casi verificati).
+  Generato il pacchetto 2.0.0 con manifest; nessun database operativo incluso.
+- Pubblicazione autorizzata mediante push di `main` e tag annotato `v2.0.0`;
+  verifica finale prevista su workflow, Release pubblica, asset e allineamento Git.
+
+## Licenza, responsabilità e attribuzione — 2026-10-20
+### Decisions and Activities
+- Aggiunta al disclaimer la frase esatta richiesta sul supporto operativo e
+  sulla verifica autonoma dei risultati prima dell'impiego professionale.
+- Attribuzione `Amboni Paolo A.` in README, manuale, specifiche, metadati
+  pyproject, `src.__author__` e intestazioni dei sorgenti del progetto.
+  Conservati il testo integrale `LICENSE` e il relativo copyright FSF.
+- `LEGAL.md` contiene autore, repository, licenza e disclaimer; il contenuto
+  del disclaimer viene confrontato con README dai test per evitare divergenze.
+- Nuovo `LicenseDialog` con due schede in sola lettura: informazioni complete
+  e testo AGPLv3 integrale. Link GitHub aperto soltanto su clic dell'utente.
+- Voce **Licenza e responsabilità** nel menu principale di `AppWindow`,
+  disponibile prima del login, per OPERATORE e ADMIN e dopo il logout.
+  Riutilizzata la finestra già aperta; nessun ulteriore pulsante nell'header.
+- Aggiunti documento e modulo GUI alle whitelist di trasferimento e Release.
+  Aggiornati contesto progetto e documentazione operativa.
+### Issues and Solutions
+- Testo di licenza e disclaimer vengono letti da percorsi relativi al codice,
+  senza dipendere dalla directory corrente o da una connessione Internet.
+  File mancanti producono un messaggio di ripristino, senza bloccare l'app.
+- Test del menu principale in subprocess per evitare interferenze fra root Tk.
+- Verifiche: **65 test mirati superati in 24.00s** (licenza, guida, versione,
+  trasferimento e updater); **collaudo Windows reale superato in 13.15s** su copia
+  senza Git, con aggiornamento, avvio offline e recupero. Superati compileall,
+  `git diff --check` e `uv lock --check`; `LICENSE` invariato.
+- Rigenerato il pacchetto in `dist/release-1.2.0-licenza/`: 39 file runtime,
+  278232 byte, inclusi LEGAL e il nuovo dialogo. Verificati CRC e tutti i digest;
+  nessuna pubblicazione effettuata. Questo pacchetto incorpora le modifiche
+  successive alla precedente build in `dist/release-1.2.0/`.
+
+## Disclaimer nel README — 2026-10-20
+### Decisions and Activities
+- Inserito in `README.md` il testo di esclusione di garanzia e limitazione di
+  responsabilità fornito dall'utente, preservandone contenuto ed enfasi Markdown.
+- Su successiva richiesta, corretti entrambi i riferimenti alla licenza:
+  GNU Affero General Public License versione 3 o successiva (AGPL-3.0-or-later)
+  e sezioni 15, 16 e 17 della GNU AGPLv3. File `LICENSE` invariato.
+### Issues and Solutions
+- Il testo fornito cita GPLv3, mentre `LICENSE` e i metadati del progetto indicano
+  AGPLv3. Discrepanza inizialmente segnalata e poi risolta su richiesta dell'utente.
+  Controllo `git diff --check` sui documenti aggiornati.
+
+## Aggiornamenti GitHub e backup completi — 2026-10-20
+### Decisions and Activities
+- Implementato il piano concordato, preservando le modifiche locali al bootstrap
+  `admin`/`admin`. Confermato tramite API che il repository è pubblico; nessuna
+  Release stabile disponibile durante la verifica del nuovo client reale.
+- Versione 1.2.0 allineata fra codice, pyproject e lockfile. Versione visualizzata
+  in sola lettura: i vecchi valori `app_version` nel DB non alterano il confronto.
+- Aggiunti motore Release/manifest e verifica ZIP/file SHA-256, controllo rete in
+  background e popup una volta per avvio, pannello ADMIN con controllo manuale,
+  note, installazione e backup datato tramite Online Backup API SQLite.
+- Aggiunti lock di istanza, runner esterno standard-library, journal atomico,
+  snapshot di programma/ambiente/database e TXT dei canali. Installazione su
+  copie senza Git, uv sync bloccato, migrazione su candidato, collaudo GUI
+  nascosto, rollback su errore e recupero prima degli import applicativi.
+- Schema SQLite versionato con migrazioni consecutive transazionali (0→1),
+  rifiuto dello schema futuro. Nuovo DB solo con consenso dedicato: recupero
+  verificato di utenti/password/ruoli, impostazioni, canali completi e contatori;
+  perdita dichiarata di campioni, risultati e audit. Nessun DB viene scaricato.
+- Build ZIP aggiornamento distinta dal trasferimento, senza dati operativi,
+  con launcher installato e manifest. Workflow Windows da tag stabile con test
+  e creazione di sola bozza Release. Nessun commit/push/tag/Release pubblicata
+  durante questa attività. Documentate prima adozione e pubblicazione.
+- Aggiornati README, manuale, transfer, specifiche, contesto e guida UPDATES.
+- Verifica finale riproducibile: TMP/TEMP in `.pytest-user-delete-uvtmp`,
+  `STRUMENTI_UPDATE_E2E=1`, `uv --offline --no-cache run --no-sync python -m pytest
+  -q -p no:cacheprovider --basetemp=.pytest-updates-delivery --tb=short`:
+  **174 passed in 65.83s**. Collaudo su copia Windows senza Git con vero uv,
+  login e campioni in dashboard offline, conservazione logica dei dati,
+  recupero con Python virtuale mancante e BAT con runtime locale.
+- Superati `compileall`, `git diff --check` e `uv lock --check` offline.
+  Tutti i test usano database sintetici; database operativo non modificato.
+- Generato `dist/release-1.2.0/strumenti-update-1.2.0.zip` con manifest:
+  37 file runtime, 274622 byte. Ricontrollati CRC dell'archivio, digest ZIP e
+  tutti i file; assenti database, backup e metadati Git. Artefatti pronti per
+  revisione e successiva pubblicazione esplicita.
+### Issues and Solutions
+- La versione DB era modificabile dall'admin: sostituita con versione del codice.
+- Il seed `INSERT OR IGNORE` incrementava le sequenze anche ai riavvii: ora usa
+  un inserimento condizionato, preservando lo stato logico durante l'upgrade.
+- Il riavvio da ambiente interrotto richiede Python base: il launcher esegue
+  il recupero prima di accedere alla .venv. Runner e snapshot restano disponibili.
+- Creare due root Tk nello stesso interprete di test causava errori Tcl:
+  il test della finestra principale ora usa un subprocess separato; i collaudi
+  grafici completi sono stati eseguiti anche fuori dalla sandbox.
+- I backup e i job restano locali, ignorati da Git ed esclusi da ogni pacchetto.
+
+## Account admin iniziale — 2026-10-20
+### Decisions and Activities
+- Analizzati avvio `app.py`, schema/seed SQLite, autenticazione e trasferimento.
+  Il seed precedente creava `admin`/`admin` solo con tabella utenti vuota.
+- Aggiornato `src/database.py`: creare `admin` con password `admin` e ruolo
+  `ADMIN` quando manca quel nome, anche con altri utenti. Confronto NOCASE;
+  nessun reset di password o ruolo se l'account esiste già. Controllo e
+  inserimento serializzati nella stessa transazione `BEGIN IMMEDIATE`.
+- Aggiornati README, manuale, specifiche, guida trasferimento e contesto progetto
+  con credenziali iniziali e percorso per creare nuovi utenti.
+- Test su database temporanei: credenziale iniziale valida, altri utenti
+  preservati, password personalizzata e ruolo mantenuti ai riavvii anche con
+  username maiuscolo. Nessun intervento sul database operativo.
+- Verifica: `uv --offline --no-cache run --no-sync python -m pytest
+  tests/test_database.py tests/test_user_deletion.py tests/test_transfer.py -q
+  -p no:cacheprovider --basetemp=.pytest-admin-bootstrap --tb=short`, TMP/TEMP
+  locali: **30 passed in 16.46s**. `git diff --check` superato.
+### Issues and Solutions
+- La sola presenza di altri utenti impediva il bootstrap: sostituito il
+  conteggio globale con la ricerca specifica dell'account `admin`.
+
 ## Sincronizzazione GitHub — 2026-10-20
 ### Decisions and Activities
 - Verificate le modifiche locali a database, test di eliminazione utenti e

@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+# Author: Amboni Paolo A.
 # Copyright (C) 2026 Strumenti-LIS Contributors
 # Distributed under the terms of the GNU Affero General Public License v3 or later.
 
@@ -53,140 +54,163 @@ class Database:
 
     def init_db(self) -> None:
         """Crea le tabelle del database se non esistono e popola i dati di default."""
+        # Leggere prima in sola lettura evita perfino il cambio journal_mode su
+        # un database creato da una versione futura e quindi non supportato.
+        from contextlib import closing
+        from src import DATABASE_SCHEMA_VERSION as SCHEMA_VERSION
+        if self.db_path.exists():
+            with closing(sqlite3.connect(self.db_path.resolve().as_uri() + "?mode=ro", uri=True)) as existing:
+                schema = existing.execute("PRAGMA user_version").fetchone()[0]
+                if schema > SCHEMA_VERSION:
+                    raise ValueError("Database più recente del programma: aggiornare il software")
+        # Ogni migrazione avanza esattamente di uno; nessun salto implicito.
+        migrations = {0: self._migrate_0_to_1}
         with self.get_connection() as conn:
-            # SQLite non apre una transazione per il solo DDL: includiamo anche
-            # ALTER TABLE e indici nello stesso aggiornamento atomico dello schema.
-            conn.execute("BEGIN")
-            cursor = conn.cursor()
-
-            # 1. Tabella Utenti
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL COLLATE NOCASE,
-                    password_hash TEXT NOT NULL,
-                    salt TEXT NOT NULL,
-                    role TEXT NOT NULL CHECK(role IN ('ADMIN', 'OPERATORE')),
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    last_login DATETIME
-                )
-            """)
-
-            # 2. Tabella Configurazioni
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS configurations (
-                    key TEXT PRIMARY KEY,
-                    value TEXT NOT NULL,
-                    description TEXT,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-
-            # 3. Tabella Transcodifiche
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS transcodings (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    instrument_param_name TEXT UNIQUE NOT NULL COLLATE NOCASE,
-                    lis_exam_code TEXT NOT NULL,
-                    description TEXT,
-                    is_active INTEGER DEFAULT 1,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    lis_substance_code TEXT
-                )
-            """)
-
-            # 4. Tabella Campioni
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS samples (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    sample_code TEXT UNIQUE NOT NULL COLLATE NOCASE,
-                    lab_code TEXT NOT NULL,
-                    year INTEGER NOT NULL,
-                    acceptance TEXT NOT NULL,
-                    conferment INTEGER NOT NULL,
-                    sample_number INTEGER NOT NULL,
-                    source_filename TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'DA_ESPORTARE' CHECK(status IN ('DA_ESPORTARE', 'ESPORTATO', 'ERRORE')),
-                    imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    exported_at DATETIME,
-                    export_filename TEXT
-                )
-            """)
-
-            # Indice su sample_code e data importazione
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_samples_code ON samples(sample_code)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_samples_imported_at ON samples(imported_at)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_samples_status ON samples(status)")
-
-            # 5. Tabella Risultati Parametri Campione
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS sample_results (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    sample_id INTEGER NOT NULL REFERENCES samples(id) ON DELETE CASCADE,
-                    param_name TEXT NOT NULL,
-                    raw_value TEXT NOT NULL,
-                    numeric_value REAL,
-                    formatted_value TEXT NOT NULL,
-                    lis_exam_code TEXT,
-                    is_mapped INTEGER DEFAULT 1,
-                    is_exported INTEGER DEFAULT 0,
-                    exported_at DATETIME,
-                    lis_substance_code TEXT
-                )
-            """)
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_sample_id ON sample_results(sample_id)")
-
-            # Migrazione automatica colonne is_exported e exported_at su database esistenti
-            cursor.execute("PRAGMA table_info(sample_results)")
-            existing_cols = {row["name"] for row in cursor.fetchall()}
-            if "is_exported" not in existing_cols:
-                cursor.execute("ALTER TABLE sample_results ADD COLUMN is_exported INTEGER DEFAULT 0")
-                cursor.execute("""
-                    UPDATE sample_results SET is_exported = 1
-                    WHERE sample_id IN (SELECT id FROM samples WHERE status = 'ESPORTATO')
-                """)
-            if "exported_at" not in existing_cols:
-                cursor.execute("ALTER TABLE sample_results ADD COLUMN exported_at DATETIME")
-
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_is_exported ON sample_results(is_exported)")
-
-            # Le colonne nullable mantengono standard tutti i dati preesistenti.
-            # Il controllo PRAGMA rende la migrazione ripetibile a ogni avvio.
-            for table in ("transcodings", "sample_results"):
-                columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
-                if "lis_substance_code" not in columns:
-                    conn.execute(f"ALTER TABLE {table} ADD COLUMN lis_substance_code TEXT")
-            conn.execute("""
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_transcodings_active_substance
-                ON transcodings(lis_exam_code, lis_substance_code)
-                WHERE is_active = 1 AND lis_substance_code IS NOT NULL
-            """)
-
-            # 6. Tabella Log di Audit
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS audit_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER REFERENCES users(id),
-                    username TEXT NOT NULL,
-                    action TEXT NOT NULL,
-                    details TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-
-            conn.commit()
-
-        # Esegui il seed iniziale
+            conn.execute("BEGIN IMMEDIATE")
+            schema = conn.execute("PRAGMA user_version").fetchone()[0]
+            if schema > SCHEMA_VERSION:
+                raise ValueError("Database più recente del programma: aggiornare il software")
+            while schema < SCHEMA_VERSION:
+                migration = migrations.get(schema)
+                if migration is None:
+                    raise ValueError(f"Migrazione mancante per lo schema {schema}")
+                migration(conn)
+                schema += 1
+                conn.execute(f"PRAGMA user_version = {schema}")
         self._seed_initial_data()
+
+    def _migrate_0_to_1(self, conn: sqlite3.Connection) -> None:
+        """Crea o aggiorna lo schema storico nella transazione del chiamante."""
+        cursor = conn.cursor()
+
+        # 1. Tabella Utenti
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL COLLATE NOCASE,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('ADMIN', 'OPERATORE')),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_login DATETIME
+            )
+        """)
+
+        # 2. Tabella Configurazioni
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS configurations (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                description TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 3. Tabella Transcodifiche
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS transcodings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                instrument_param_name TEXT UNIQUE NOT NULL COLLATE NOCASE,
+                lis_exam_code TEXT NOT NULL,
+                description TEXT,
+                is_active INTEGER DEFAULT 1,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                lis_substance_code TEXT
+            )
+        """)
+
+        # 4. Tabella Campioni
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sample_code TEXT UNIQUE NOT NULL COLLATE NOCASE,
+                lab_code TEXT NOT NULL,
+                year INTEGER NOT NULL,
+                acceptance TEXT NOT NULL,
+                conferment INTEGER NOT NULL,
+                sample_number INTEGER NOT NULL,
+                source_filename TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'DA_ESPORTARE' CHECK(status IN ('DA_ESPORTARE', 'ESPORTATO', 'ERRORE')),
+                imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                exported_at DATETIME,
+                export_filename TEXT
+            )
+        """)
+
+        # Indice su sample_code e data importazione
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_samples_code ON samples(sample_code)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_samples_imported_at ON samples(imported_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_samples_status ON samples(status)")
+
+        # 5. Tabella Risultati Parametri Campione
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sample_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sample_id INTEGER NOT NULL REFERENCES samples(id) ON DELETE CASCADE,
+                param_name TEXT NOT NULL,
+                raw_value TEXT NOT NULL,
+                numeric_value REAL,
+                formatted_value TEXT NOT NULL,
+                lis_exam_code TEXT,
+                is_mapped INTEGER DEFAULT 1,
+                is_exported INTEGER DEFAULT 0,
+                exported_at DATETIME,
+                lis_substance_code TEXT
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_sample_id ON sample_results(sample_id)")
+
+        # Migrazione automatica colonne is_exported e exported_at su database esistenti
+        cursor.execute("PRAGMA table_info(sample_results)")
+        existing_cols = {row["name"] for row in cursor.fetchall()}
+        if "is_exported" not in existing_cols:
+            cursor.execute("ALTER TABLE sample_results ADD COLUMN is_exported INTEGER DEFAULT 0")
+            cursor.execute("""
+                UPDATE sample_results SET is_exported = 1
+                WHERE sample_id IN (SELECT id FROM samples WHERE status = 'ESPORTATO')
+            """)
+        if "exported_at" not in existing_cols:
+            cursor.execute("ALTER TABLE sample_results ADD COLUMN exported_at DATETIME")
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_is_exported ON sample_results(is_exported)")
+
+        # Le colonne nullable mantengono standard tutti i dati preesistenti.
+        # Il controllo PRAGMA rende la migrazione ripetibile a ogni avvio.
+        for table in ("transcodings", "sample_results"):
+            columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if "lis_substance_code" not in columns:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN lis_substance_code TEXT")
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_transcodings_active_substance
+            ON transcodings(lis_exam_code, lis_substance_code)
+            WHERE is_active = 1 AND lis_substance_code IS NOT NULL
+        """)
+
+        # 6. Tabella Log di Audit
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                username TEXT NOT NULL,
+                action TEXT NOT NULL,
+                details TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
 
     def _seed_initial_data(self) -> None:
         """Popola l'utente admin di default, le transcodifiche e le configurazioni iniziali."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
 
-            # Seed Utente Admin
-            cursor.execute("SELECT COUNT(*) AS cnt FROM users")
-            if cursor.fetchone()["cnt"] == 0:
+            # Serializziamo controllo e inserimento anche in caso di avvii simultanei.
+            # Gli altri utenti non devono impedire il primo accesso con admin;
+            # Un account esistente, anche scritto in maiuscolo, conserva password
+            # e ruolo scelti grazie al confronto senza distinzione di maiuscole.
+            conn.execute("BEGIN IMMEDIATE")
+            cursor.execute("SELECT 1 FROM users WHERE username = ?", ("admin",))
+            if cursor.fetchone() is None:
                 salt = generate_salt()
                 pwd_hash = hash_password("admin", salt)
                 cursor.execute(
@@ -222,8 +246,12 @@ class Database:
             # Seed Transcodifiche Iniziali
             for param, lis_code in DEFAULT_TRANSCODINGS.items():
                 cursor.execute(
-                    "INSERT OR IGNORE INTO transcodings (instrument_param_name, lis_exam_code, description) VALUES (?, ?, ?)",
-                    (param, lis_code, f"Mappatura di default per {param}")
+                    # OR IGNORE su AUTOINCREMENT incrementerebbe sqlite_sequence
+                    # anche senza inserire: il riavvio deve lasciare intatti i dati.
+                    "INSERT INTO transcodings (instrument_param_name, lis_exam_code, description) "
+                    "SELECT ?, ?, ? WHERE NOT EXISTS "
+                    "(SELECT 1 FROM transcodings WHERE instrument_param_name = ?)",
+                    (param, lis_code, f"Mappatura di default per {param}", param)
                 )
 
             conn.commit()
@@ -247,7 +275,7 @@ class Database:
                 export_dir=cfg_dict.get("path_export", DEFAULT_PATHS["path_export"]),
                 allowed_labs=cfg_dict.get("allowed_labs", DEFAULT_LAB_CODES),
                 default_driver=cfg_dict.get("default_driver", DEFAULT_DRIVER_NAME),
-                app_version=cfg_dict.get("app_version", DEFAULT_APP_VERSION),
+                app_version=DEFAULT_APP_VERSION,
             )
 
     def save_config_value(self, key: str, value: str, description: Optional[str] = None) -> None:
