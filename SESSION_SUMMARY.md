@@ -24,6 +24,10 @@
   Generato il pacchetto 2.0.0 con manifest; nessun database operativo incluso.
 - Pubblicazione autorizzata mediante push di `main` e tag annotato `v2.0.0`;
   verifica finale prevista su workflow, Release pubblica, asset e allineamento Git.
+- Primo workflow interrotto prima dei test: `actions/setup-python` non offre
+  Python 3.12.13 su Windows 2025. Corretto usando `uv python install`, come nel
+  pacchetto distribuito. Aggiunto avvio manuale per un tag esistente, con checkout
+  esplicito del tag e senza riscriverne la storia.
 
 ## Licenza, responsabilità e attribuzione — 2026-10-20
 ### Decisions and Activities
