@@ -21,6 +21,18 @@
   `0a7804a4da6c72c73917457e1a6f0b0b7772b8d5db6f534f5f8b746c6858580b`.
 - Pubblicazione predisposta tramite sincronizzazione `main` e tag annotato
   `v2.0.1`; il workflow verifica nuovamente la suite completa prima della Release.
+- Pubblicazione completata sul commit `ea5f466`: workflow **39394699218**
+  concluso con `success`, Release stabile `v2.0.1` (non draft, non prerelease).
+  https://github.com/AmboniRider/strumentiLysa/releases/tag/v2.0.1
+- Verificati dal client updater: scoperta della 2.0.1 da 2.0.0, download ZIP,
+  CRC, digest di tutti i 39 file runtime, versione e correzione effettivamente
+  incluse, assenza di database. Asset pubblico: ZIP 277781 byte e manifest
+  4236 byte; SHA-256 ZIP:
+  `4fa110410afb4d6e0e7735228371165645ee945cb6f0ef5946643040f4c058ad`.
+  La build GitHub usa i terminatori normalizzati da Git e differisce in byte
+  dalla build locale; entrambi i pacchetti rispettano i rispettivi manifest.
+- Ramo remoto `main` e tag verificati sul commit di rilascio; questo riepilogo
+  viene sincronizzato con un commit documentale successivo senza spostare il tag.
 
 ## Salvataggio percorsi nelle impostazioni — 2026-10-20
 ### Decisions and Activities

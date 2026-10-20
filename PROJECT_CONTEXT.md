@@ -151,6 +151,9 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
   note dedicate alla correzione del salvataggio percorsi, con conservazione di
   driver e laboratori. Schema database 1 invariato; pubblicazione tramite il
   workflow Windows dopo i controlli automatici sul tag `v2.0.1`.
+  Release stabile pubblicata e verificata tramite updater: 39 file runtime,
+  manifest e checksum validi. URL:
+  https://github.com/AmboniRider/strumentiLysa/releases/tag/v2.0.1
 - **2026-10-20 — Salvataggio percorsi corretto**: eliminato il riferimento al
   campo rimosso `entry_version`; la versione resta in sola lettura e driver e
   laboratori configurati non vengono reimpostati. **22 test mirati superati**,
