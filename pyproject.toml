@@ -1,6 +1,6 @@
 [project]
 name = "strumenti-lis"
-version = "2.0.1"
+version = "2.0.2"
 description = "Interfaccia tra file strumenti di laboratorio e LIS"
 authors = [{ name = "Amboni Paolo A." }]
 readme = "progetto.md"
@@ -16,6 +16,7 @@ classifiers = [
 dependencies = [
     "customtkinter>=5.2.0",
     "pillow>=10.0.0",
+    "truststore>=0.10.5; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

@@ -4,6 +4,12 @@ Questa procedura prepara una nuova postazione **Windows x64** senza Python,
 uv o Git preinstallati. Serve Internet per installare o ripristinare l'ambiente;
 dopo l'installazione l'applicazione funziona offline.
 
+Per aggiornare una postazione già in uso, consultare
+[UPDATES.md](UPDATES.md#aggiornamento-manuale-tramite-git): include anche la
+procedura Git con clone separato quando l'updater fallisce. Conservare il
+database operativo; lo ZIP di trasferimento descritto qui serve a nuove
+installazioni, mentre lo ZIP aggiornamento esclude il database.
+
 ## 1. Creare il pacchetto sulla postazione attuale
 
 1. È consigliabile chiudere Strumenti-LIS per trasferire le configurazioni definitive.

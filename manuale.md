@@ -95,6 +95,11 @@ All'avvio il programma verifica in background se esiste una nuova Release
 stabile su GitHub. Un popup informa tutti gli utenti; gli operatori devono
 rivolgersi all'amministratore. Internet assente non impedisce l'utilizzo.
 
+Dalla versione 2.0.2 il controllo HTTPS usa la validazione nativa Windows e
+segnala distintamente gli errori di certificato, HTTP e timeout. Il controllo
+dei metadati mantiene il limite di 10 secondi per richiesta; il pacchetto può
+impiegare fino a 5 minuti, con limite di inattività di 10 secondi sul socket.
+
 L'amministratore trova **Aggiornamenti e backup** nelle **Impostazioni**:
 può verificare manualmente, leggere le novità, installare con riavvio e creare
 una copia completa datata del database in una cartella a scelta.
@@ -110,6 +115,13 @@ Se l'aggiornamento fallisce, viene ripristinata l'installazione precedente.
 
 La versione software è mostrata in sola lettura e viene aggiornata con il codice.
 Le copie di sviluppo con Git usano il flusso Git per installare aggiornamenti.
+Se il controllo fallisce, il pannello mostra nel riquadro delle note i passaggi
+per aggiornare manualmente tramite Git. Con `.git` si usa `git pull --ff-only`
+dopo aver controllato le modifiche locali; senza `.git` si genera lo ZIP
+aggiornamento da un clone separato. Prima creare una copia del database e
+chiudere l'applicazione. Il database e le cartelle operative restano locali;
+il successivo avvio può applicare le migrazioni previste. La procedura manuale
+non esegue il backup e il rollback automatici dell'updater.
 I backup restano sul PC e non vengono caricati su GitHub; i file strumentali
 esterni al database richiedono una copia separata.
 Istruzioni complete e prima adozione: [Aggiornamenti](UPDATES.md).

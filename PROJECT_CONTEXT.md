@@ -33,10 +33,16 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
   consultazione offline in sola lettura. I documenti sono inclusi nei pacchetti.
 - `src/update_service.py`: controllo Release pubbliche, confronto versioni,
   contratto manifest, whitelist runtime, checksum e download isolato.
+  Su Windows usa un contesto Truststore/CryptoAPI locale al downloader, con
+  verifica certificati e hostname. Budget metadati 10s, ZIP 300s, socket 10s;
+  messaggi distinti per TLS, HTTP e timeout, mantenendo le cause concatenate.
 - `src/backup.py`: copia SQLite completa, inclusi dati WAL committati, nome
   univoco e verifiche d'integrità/chiavi esterne, senza modifica del sorgente.
 - `src/gui/update_dialog.py`: polling Tk e worker di rete/backup; popup a tutti,
   azioni di installazione e backup riservate ad ADMIN nelle Impostazioni.
+  In caso di errore di verifica, il riquadro note mostra istruzioni Git copiabili:
+  pull fast-forward nelle copie con `.git`, clone separato e generazione dello
+  ZIP senza database nelle installazioni da pacchetto.
 - `update_runner.py`: bootstrap standard-library con lock di istanza, journal
   prima delle scritture, installazione esterna, rollback di file/ambiente/database
   e recupero all'avvio prima degli import applicativi.
@@ -147,6 +153,43 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - Nessuna perdita accidentale di dati originali (i file elaborati vengono archiviati, non cancellati).
 
 ## Current Status & Active TODO
+- **2026-10-20 — Patch release 2.0.2 in preparazione**: versione e lockfile
+  allineati; nuova dipendenza runtime Windows `truststore` 0.10.5 (MIT).
+  Implementati TLS nativo, errori espliciti anche in console e timeout ZIP
+  separato. Incluse istruzioni Git e documentazione; schema 1 e conservazione
+  dati invariati. Pubblicazione richiesta su GitHub tramite tag `v2.0.2` e
+  workflow Windows, dopo test e verifica del pacchetto senza database.
+  Collaudo locale: **195 test verificati**, compreso update Windows isolato e
+  recupero; HTTPS nativo provato su manifest e ZIP pubblici con SHA-256 valido.
+- **2026-10-20 — Istruzioni Git come alternativa all'updater**: aggiunte al
+  pannello di errore e a README, UPDATES, manuale e guida trasferimento.
+  Distinte copie Git e postazioni senza `.git`; database/WAL/SHM e cartelle
+  operative preservati, controllo dei file già tracciati e backup preliminare.
+  La procedura documentata scarica codice senza commit/push automatici; nessuna
+  modifica al trasporto TLS, timeout, versione o pubblicazione.
+- **2026-10-20 — Revisione updater dopo screenshot certificato**: riprodotti
+  due difetti, errore TLS mascherato nel pannello e scadenza globale di 10s
+  applicata anche allo ZIP. **50 test esistenti superati**, due prove isolate
+  xfail strict dimostrano i difetti. TLS predefinito Python/OpenSSL carica CA e
+  ROOT Windows ma non usa il validatore nativo CryptoAPI. Da collaudare sul
+  target un contesto nativo esplicito (es. Truststore), conservando verifica
+  certificati e hostname. TODO: implementare gestione TLS Windows, messaggi
+  distinti e timeout pacchetto separato. In questa revisione nessun sorgente
+  applicativo, dipendenza, versione o Release modificato.
+- **2026-10-20 — Diagnosi verifica aggiornamenti su seconda postazione**:
+  segnalato errore sulla 2.0.0 installata, mentre il controllo locale funziona.
+  `check_release()` consulta l'API pubblica e scarica il manifest soltanto se
+  trova una versione successiva; la copia locale 2.0.1 può quindi eseguire meno
+  richieste della postazione 2.0.0. Gli errori tecnici vengono concatenati a un
+  messaggio generico e il controller li mostra nel pannello, senza stampa in
+  console. Il successivo traceback in `J:\debug.txt` conferma un errore TLS
+  `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate` già
+  nella richiesta API, prima del manifest. Da identificare la CA mancante o
+  l'eventuale ispezione HTTPS sulla postazione. `J:\debug3.txt` conferma la
+  risposta JSON corretta nel browser, senza avvisi secondo l'utente; emittente
+  TLS ancora non acquisito. Da riprovare Python dopo la visita nel browser.
+  TODO: valutare diagnostica più
+  esplicita; nessuna modifica al motore aggiornamenti in questa analisi.
 - **2026-10-20 — Patch release 2.0.1**: versione, metadati e lockfile allineati;
   note dedicate alla correzione del salvataggio percorsi, con conservazione di
   driver e laboratori. Schema database 1 invariato; pubblicazione tramite il

@@ -1,5 +1,178 @@
 # SESSION SUMMARY
 
+## Patch release 2.0.2 — 2026-10-20
+### Decisions and Activities
+- Richiesto avanzamento a 2.0.2 con correzioni e documentazione, sincronizzazione
+  GitHub e pubblicazione coerente con il workflow delle patch precedenti.
+- Allineati versione codice e pyproject; `uv lock` aggiunge Truststore 0.10.5
+  (MIT), solo su Windows, senza aggiornare le altre dipendenze bloccate.
+- Implementato contesto TLS nativo Windows locale al downloader, senza
+  disabilitare verifiche né modificare ssl globalmente. Altrove resta il
+  contesto predefinito della libreria standard. Dipendenza mancante segnalata
+  con istruzioni per riallineare l'ambiente; il resto dell'app resta offline.
+- Budget metadati 10s e ZIP 300s, con timeout socket 10s e limiti/checksum
+  conservati. Errori TLS/HTTP/timeout distinti e avviso in console dal worker.
+- Release notes dedicate a updater e istruzioni Git; aggiornati README,
+  UPDATES, manuale e documenti di contesto. La nuova patch conserva la
+  correzione percorsi della 2.0.1. Schema database 1 invariato.
+### Issues and Solutions
+- Verifica remota autorizzata: `origin/main` coincide con il commit locale
+  iniziale `0d18c9b`; tag `v2.0.2` assente. La sandbox non risolve GitHub:
+  usata esecuzione autorizzata per accesso rete e preparazione dipendenza.
+- La cache isolata non conteneva i metadati necessari a uv lock offline:
+  lock e sync eseguiti con rete autorizzata, cache e temp sotto il progetto.
+- **55 test mirati superati in 13.12s** su rete, updater e versione, prima
+  dell'aggiunta della regressione console. Coperti contesto nativo verificante,
+  errore remoto TLS diretto/incapsulato, HTTP senza URL sensibili, download
+  oltre 10s, budget finiti, controllo metadati breve e massimo bytes.
+- Il PC remoto originale resta da collaudare dopo l'installazione della patch:
+  i test locali non costituiscono verifica della sua specifica catena TLS.
+- Collaudo finale locale: **194 passed, 1 skipped in 65.85s** nella suite
+  ordinaria; test Windows isolato attivato separatamente con
+  `STRUMENTI_UPDATE_E2E=1`: **1 passed in 18.18s**. Totale 195 casi verificati,
+  con update reale uv, conservazione dati, login/dashboard offline e recupero.
+- Prova HTTPS reale autorizzata con Truststore: scoperta 2.0.1 da 2.0.0,
+  download manifest e ZIP pubblico da 277781 byte, SHA-256 corretto.
+  `uv lock --check --offline` e `git diff --check` superati.
+- Generato `dist/release-2.0.2/`: ZIP locale da 283128 byte, 39 file runtime,
+  manifest/CRC/digest di tutti i file validi, TLS e istruzioni Git inclusi,
+  nessun database o dato operativo. SHA-256 locale:
+  `d047a47a5dde85885f0edc7f6a744dab4b59e65a9ff421bbc779d9f35331a2da`.
+- Fetch remoto finale: HEAD e origin/main allineati prima del commit. Ambito
+  di pubblicazione esplicito: sorgenti updater, metadati/lock, test di rete,
+  note e guide, contesto e riepilogo della sessione. Il file temporaneo
+  `uv-edb47b099dfc4361.lock` resta escluso dal commit.
+
+## Istruzioni Git nel pannello di errore e nelle guide — 2026-10-20
+### Decisions and Activities
+- Richiesta di aggiungere all'errore di aggiornamento una procedura Git che
+  preservi il database e di documentarla. Analizzati controller, servizio,
+  generatore di Release, `sync.bat`, whitelist e regole `.gitignore`.
+- `UpdateDialog.refresh()` mantiene l'errore nel riepilogo e mostra istruzioni
+  copiabili nel riquadro scorrevole quando il controllo fallisce. Il contenuto
+  torna alle note della Release dopo un controllo riuscito.
+- `manual_git_update_help(root)` distingue repository e installazioni senza
+  `.git` (directory o file per worktree). I repository usano controllo dello
+  stato, controllo database non tracciato, switch su main e pull fast-forward,
+  quindi uv sync. Le installazioni usano un clone separato e build_release.py
+  con il Python già installato, per ottenere un pacchetto con launcher corretto.
+- Aggiornati README, UPDATES, manuale operatore e guida trasferimento. Precisati
+  backup preliminare, conservazione DB/WAL/SHM e directory locali, eventuali
+  migrazioni all'avvio e assenza di rollback automatico nel percorso manuale.
+  Nessun cambiamento a TLS, timeout, versione, dipendenze o Release.
+### Issues and Solutions
+- `sync.bat` registra e pubblica anche le modifiche locali: mantenuto il suo
+  ruolo di sincronizzazione bidirezionale e documentato separatamente il solo
+  aggiornamento con `git pull --ff-only origin main`.
+- `.gitignore` non rimuove file già tracciati: aggiunta la verifica con
+  `git ls-files` e indicazione di fermarsi se il database compare. Nella copia
+  corrente il comando non elenca database. Non è stato eseguito alcun comando
+  di rimozione dall'indice, pull o push sulla copia operativa.
+- Copiare il repository intero su un'installazione sostituirebbe il launcher
+  locale con quello di sviluppo: il clone resta separato e si estrae soltanto
+  lo ZIP generato dalla whitelist del progetto, che non contiene dati.
+- Verifica: **55 test superati in 18.70s** su aggiornamenti, trasferimento e
+  guida (`uv run python -m pytest tests/test_updates.py tests/test_transfer.py
+  tests/test_help.py -q -p no:cacheprovider --basetemp .pytest-git-update-help`,
+  con uv offline/no-cache/no-sync e TMP/TEMP locali). Prova aggiuntiva del vero
+  metodo refresh con widget simulati: errore su copia installata, istruzioni
+  repository e worktree, nuovo controllo, ripristino note e abilitazione
+  installazione al successo. Prima prova corretta completando il manifest
+  sintetico con il campo `losses`, senza modifiche applicative aggiuntive.
+  `git diff --check` superato. Nessuna pubblicazione eseguita.
+
+## Revisione codice updater e certificato Sectigo — 2026-10-20
+### Decisions and Activities
+- Richiesta di verificare eventuali bug nel codice dopo lo screenshot del
+  certificato `*.github.com`, emittente `Sectigo Public Server Authentication
+  CA DV E36`, valido per le date visualizzate. Analizzati servizio download,
+  controller, generatore installer/launcher, runner e copertura dei test.
+- Revisione senza modifica ai sorgenti applicativi, dipendenze, versione o
+  Release; mantenute le precedenti modifiche documentali. Le prove aggiuntive
+  sono isolate nella cartella ignorata `.pytest-updater-review/`.
+### Issues and Solutions
+- **Difetto riprodotto: diagnostica TLS nascosta.** `check_release()` incapsula
+  URLError/SSLCertVerificationError in un messaggio generico; il controller
+  invia soltanto `str(exc)` al pannello senza log. Una prova riproduce il tipo
+  di errore remoto e verifica che il messaggio atteso sui certificati manchi,
+  pur conservando la causa nel traceback concatenato.
+- **Difetto riprodotto: timeout globale dello ZIP.** `download()` applica la
+  stessa scadenza totale di 10 secondi a API, manifest e pacchetto fino a 100 MB.
+  Due letture simulate senza timeout del socket, con tempo totale oltre 10s,
+  causano l'interruzione. Non spiega il traceback remoto, che è TLS, ma può
+  impedire l'installazione su connessioni lente.
+- **Compatibilità TLS da verificare sul target.** L'updater usa urllib con
+  contesto predefinito Python/OpenSSL. Il sorgente ssl.py 3.12 locale conferma
+  che carica i certificati CA/ROOT Windows: non è corretto attribuire il caso
+  alla totale assenza di uso dello store di sistema. La costruzione/verifica
+  della catena rimane OpenSSL e non usa CryptoAPI per recuperare intermedi
+  mancanti come un validatore nativo. Browser funzionante e CA pubblica nello
+  screenshot sono coerenti con questa differenza, ma non dimostrano ancora
+  quale anello della catena manchi sul PC remoto.
+- Correzione raccomandata per Windows: valutare un contesto esplicito
+  `truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)` locale al downloader, senza
+  patch globali né disattivazione TLS; dipendenza da aggiungere e bloccare con
+  uv, poi collaudare sul target. Documentazioni ufficiali Python e Truststore
+  consultate. Separare timeout metadati/pacchetto e distinguere gli errori
+  certificato, HTTP e connessione nel pannello e in una diagnostica locale.
+- **Copertura:** test di release/staging sostituiscono download con bytes
+  controllati; il collaudo installazione disabilita il controllo aggiornamenti
+  nella GUI e opera offline. Non certificano il comportamento HTTPS del target.
+- **Verifica:** `uv run python -m pytest tests/test_updates.py
+  tests/test_transfer.py .pytest-updater-review/review_checks.py -q -rx
+  -p no:cacheprovider --basetemp .pytest-updater-review-data`, con uv
+  offline/no-cache/no-sync e TMP/TEMP nel progetto: **50 passed, 2 xfailed in
+  19.66s**. I due xfail strict sono aspettative desiderate che riproducono i
+  difetti correnti; non sono correzioni già applicate. Nessun test usa il DB
+  operativo o modifica certificati di sistema. `git diff --check` superato.
+
+## Diagnosi verifica aggiornamenti su seconda postazione — 2026-10-20
+### Decisions and Activities
+- Analizzati struttura, servizio aggiornamenti, controller GUI, generatore
+  dell'installer/launcher e regressioni esistenti. L'utente indica la versione
+  2.0.0 sulla postazione installata; la copia di sviluppo è alla 2.0.1.
+- Le richieste pubbliche non usano Git o credenziali. Il launcher `--offline`
+  riguarda uv e non impedisce le richieste urllib eseguite dall'applicazione.
+- Rilevata differenza nel percorso di verifica: dalla 2.0.0 occorre scaricare
+  anche il manifest della release successiva; alla versione corrente il
+  controllo può terminare dopo l'elenco delle Release.
+### Issues and Solutions
+- Il servizio sostituisce le eccezioni di rete con un UpdateError generico,
+  conservandole in `__cause__`; il worker non stampa traceback in console.
+  L'assenza di errori in console non dimostra il successo della richiesta.
+- Ipotesi da distinguere sulla postazione interessata: proxy/firewall,
+  validazione TLS, timeout di 10 secondi, limiti API GitHub. Nessuna causa
+  specifica ancora verificata da remoto. Consultate le documentazioni ufficiali
+  GitHub sui limiti API e Python sul comportamento dei proxy urllib.
+- Proposta diagnostica in sola lettura: dalla cartella installata eseguire
+  `.\.venv\Scripts\python.exe -c "from src.update_service import check_release; check_release()"`
+  in PowerShell per ottenere il traceback completo, inclusa la causa originale.
+  Nessuna modifica al codice applicativo, ai dati o alla configurazione di rete.
+- Verifica locale: **2 test mirati superati** (errore di rete e selezione delle
+  Release stabili), con uv offline/no-sync/no-cache e dati temporanei locali.
+  Non è stato eseguito un controllo di rete sulla seconda postazione.
+- Successivo riscontro dell'utente in `J:\debug.txt`: Python 3.12.13 locale
+  fallisce durante l'handshake TLS della prima richiesta `download(API)` con
+  `SSLCertVerificationError: unable to get local issuer certificate`.
+  Il caso osservato non arriva al download del manifest né a una risposta
+  HTTP di rate limit. Confermato il problema di costruzione della catena di
+  fiducia, ancora da distinguere tra CA pubblica/intermedia mancante e
+  certificato di proxy/antivirus con ispezione HTTPS.
+- Passo diagnostico successivo: aprire api.github.com dal browser della
+  postazione e identificare l'emittente del certificato e gli eventuali avvisi.
+  Ripristinare la catena attendibile corretta con aggiornamenti Windows o
+  intervento IT per CA aziendali; mantenere attiva la verifica TLS.
+  Aggiornati solo i due documenti di contesto; nessuna modifica funzionale.
+- `J:\debug3.txt` contiene la risposta JSON corretta delle Release pubbliche,
+  inclusa la 2.0.1 con ZIP e manifest. L'utente conferma assenza di avvisi nel
+  browser. Questo verifica il percorso del browser, non la validazione Python.
+  Il file non contiene l'emittente o la catena del certificato TLS.
+- Prima di ulteriori interventi: riavviare l'app e ripetere il controllo dopo
+  la visita nel browser, poiché Windows può recuperare certificati intermedi
+  mancanti durante la validazione (documentazione Microsoft AIA). Effetto sulla
+  postazione ancora da verificare. Se persiste, acquisire l'emittente del
+  certificato dal browser. Nessuna modifica di certificati o codice eseguita.
+
 ## Patch release 2.0.1 — 2026-10-20
 ### Decisions and Activities
 - Richiesta esplicita di avanzare a 2.0.1, sincronizzare e pubblicare su GitHub

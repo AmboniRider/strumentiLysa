@@ -7,6 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 import queue
 import json
+import logging
 import subprocess
 import sys
 import threading
@@ -19,7 +20,7 @@ from src import __version__
 from src.auth import SessionManager
 from src.backup import dated_backup
 from src.config import BASE_DIR
-from src.update_service import Release, UpdateError, check_release, stage_release
+from src.update_service import REPOSITORY, Release, UpdateError, check_release, stage_release
 
 
 class UpdateController:
@@ -49,6 +50,9 @@ class UpdateController:
             try:
                 self.events.put((check_release(), ""))
             except Exception as exc:
+                # Il messaggio distingue TLS, HTTP e timeout; resta consultabile
+                # anche nella console senza stampare URL o credenziali locali.
+                logging.getLogger(__name__).warning("Verifica aggiornamenti fallita: %s", exc)
                 self.events.put((None, str(exc)))
 
         threading.Thread(target=worker, daemon=True).start()
@@ -103,6 +107,64 @@ def require_admin() -> None:
         raise PermissionError("Operazione riservata agli amministratori")
 
 
+def manual_git_update_help(root: Path) -> str:
+    """Restituisce istruzioni Git adatte alla cartella installata, senza eseguirle.
+
+    root identifica la cartella del programma. Le copie senza metadati Git
+    usano un clone separato e il generatore di Release: copiare direttamente
+    il repository sovrascriverebbe anche il launcher dedicato all'installazione.
+    """
+    introduction = (
+        "AGGIORNAMENTO MANUALE TRAMITE GIT\n\n"
+        "Prima creare una copia completa del database con il pulsante dedicato, "
+        "poi chiudere il programma. Serve Git installato e accesso a GitHub.\n"
+        "Aprire PowerShell nella cartella del programma. Eseguire i comandi "
+        "uno alla volta e fermarsi se compare un errore.\n\n"
+    )
+    if (root / ".git").exists():
+        procedure = (
+            "COPIA CON REPOSITORY GIT (richiede anche uv)\n"
+            "git status --short\n"
+            "git ls-files data '*.db' '*.db-wal' '*.db-shm'\n"
+            "Se ci sono modifiche ai file versionati, fermarsi e conservarle "
+            "prima di proseguire. Se il secondo comando elenca il database, "
+            "fermarsi e far verificare l'esclusione dei dati da Git.\n"
+            "git switch main\n"
+            "git pull --ff-only origin main\n"
+            "uv sync --locked --no-dev --no-install-project\n"
+            ".\\strumenti.bat\n\n"
+            "Se Git segnala conflitti o rami divergenti, fermarsi e contattare "
+            "chi gestisce il software.\n"
+        )
+    else:
+        procedure = (
+            "INSTALLAZIONE SENZA REPOSITORY GIT\n"
+            "Usare una cartella sorgenti nuova e separata; non inizializzare "
+            "Git nella cartella operativa.\n"
+            f"git clone --branch main --single-branch https://github.com/{REPOSITORY}.git "
+            "..\\strumenti-sorgenti\n"
+            ".\\.venv\\Scripts\\python.exe ..\\strumenti-sorgenti\\build_release.py "
+            "--output ..\\strumenti-sorgenti\\dist\\aggiornamento-git\n"
+            "Aprire ..\\strumenti-sorgenti\\dist\\aggiornamento-git ed estrarre "
+            "il solo ZIP strumenti-update nella cartella operativa, "
+            "confermando la sostituzione dei file del programma.\n"
+            ".\\installa.bat\n"
+            ".\\strumenti.bat\n\n"
+            "Se strumenti-sorgenti esiste già, scegliere un altro nome e "
+            "adattare i percorsi prima di iniziare.\n"
+        )
+    return introduction + procedure + (
+        "\nDATABASE E DATI LOCALI\n"
+        "data/strumenti.db, i file WAL/SHM e le cartelle operative sono esclusi "
+        "da Git e dallo ZIP aggiornamento. Conservarli sul PC; non usare lo ZIP "
+        "di trasferimento per aggiornare una postazione esistente.\n"
+        "L'avvio può applicare le migrazioni previste dalla nuova versione. "
+        "Questa procedura manuale non esegue il backup e il rollback automatici "
+        "dell'updater.\n\n"
+        "Istruzioni complete: UPDATES.md, sezione Aggiornamento manuale tramite Git."
+    )
+
+
 class UpdateDialog(ctk.CTkToplevel):
     """Pannello amministrativo con verifica, installazione e copia completa DB."""
 
@@ -137,12 +199,16 @@ class UpdateDialog(ctk.CTkToplevel):
         self.refresh()
 
     def refresh(self) -> None:
-        """Mostra anche errori di rete che il controllo all'avvio lascia silenziosi."""
+        """Mostra l'errore e la procedura Git nel riquadro scorrevole delle note."""
         controller = self.controller
+        notes = controller.release.notes if controller.release else ""
         if controller.busy:
             status = "Verifica GitHub in corso…"
         elif controller.error:
-            status = controller.error
+            status = controller.error + "\nAggiornamento manuale tramite Git: istruzioni qui sotto."
+            # Il testo lungo resta copiabile e scorrevole: non comprime i
+            # pulsanti e compare solo quando il controllo non è riuscito.
+            notes = manual_git_update_help(BASE_DIR)
         elif controller.release:
             status = f"Disponibile: {controller.release.version}\n{controller.release.database_message}"
         else:
@@ -150,7 +216,7 @@ class UpdateDialog(ctk.CTkToplevel):
         self.status.configure(text=status)
         self.notes.configure(state="normal")
         self.notes.delete("1.0", "end")
-        self.notes.insert("1.0", controller.release.notes if controller.release else "")
+        self.notes.insert("1.0", notes)
         self.notes.configure(state="disabled")
         self.check_button.configure(state="disabled" if controller.busy or self.pending else "normal")
         self.backup_button.configure(state="disabled" if self.pending else "normal")

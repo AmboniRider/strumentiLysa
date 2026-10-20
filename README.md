@@ -21,8 +21,11 @@ Supporta Dionex IC, Mettler Toledo e UV-Vis tramite driver dedicati.
 - **Correzione di bug:** selezioni di esportazione, eliminazione utenti con
   conservazione dell'audit, primo accesso e aggiornamento del titolo finestra.
 
-La versione tecnica è **2.0.1**. Corretto il salvataggio dei percorsi nelle
-impostazioni, preservando driver e codici laboratorio configurati.
+La versione tecnica è **2.0.2**. Il controllo aggiornamenti usa la validazione
+dei certificati nativa Windows, distingue errori TLS/HTTP/timeout e mostra
+istruzioni Git alternative. Il download del pacchetto dispone di un budget
+separato di 5 minuti; documentazione di aggiornamento e conservazione dati rivista.
+Inclusa la correzione 2.0.1 del salvataggio percorsi, con driver e laboratori preservati.
 L'aggiornamento conserva il database e i dati:
 non occorre scaricare un database nuovo. Dettagli in [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
@@ -90,6 +93,46 @@ All'avvio una nuova versione viene segnalata a tutti gli utenti senza bloccare
 l'uso offline. Il normale aggiornamento conserva i dati; eventuali sostituzioni
 del database richiedono conferma e salvano prima database e transcodifiche.
 Dettagli, prima adozione e pubblicazione: [UPDATES.md](UPDATES.md).
+
+### Aggiornare il codice tramite Git conservando il database
+
+Se l'updater non riesce a collegarsi a GitHub, il pannello mostra le istruzioni
+per l'aggiornamento manuale. Creare prima una copia completa del database e
+chiudere l'applicazione. Git deve riuscire a collegarsi a GitHub: non aggira
+eventuali blocchi di rete o certificati anche del client Git.
+
+Per una cartella che contiene già `.git`, aprire PowerShell nella root ed
+eseguire i comandi **uno alla volta**, fermandosi al primo errore:
+
+```powershell
+git status --short
+```
+
+Se compaiono modifiche ai file versionati, conservarle e risolverle prima di
+proseguire. Con copia di lavoro pulita, Git e uv installati:
+
+```powershell
+git switch main
+git pull --ff-only origin main
+uv sync --locked --no-dev --no-install-project
+.\strumenti.bat
+```
+
+`--ff-only` interrompe l'operazione se le storie divergono; i comandi non
+pubblicano modifiche su GitHub. Il database `data/strumenti.db`, i file
+`-wal`/`-shm` e le cartelle operative sono già esclusi dal repository e restano
+locali. L'applicazione può applicare le migrazioni previste al successivo avvio.
+`.gitignore` non esclude file eventualmente già versionati: in una copia
+personalizzata verificare con `git ls-files data '*.db' '*.db-wal' '*.db-shm'`
+che il database non sia tracciato; se compare, fermarsi e far verificare la copia.
+
+**Per un'installazione da pacchetto senza `.git`**, usare un clone separato e
+generare il solo ZIP aggiornamento, preservando il launcher installato:
+[procedura completa in UPDATES.md](UPDATES.md#aggiornamento-manuale-tramite-git).
+La procedura manuale richiede un backup precedente: non esegue il backup e il
+rollback automatici dell'updater.
+
+### Sincronizzare anche le modifiche locali
 
 La sincronizzazione seguente riguarda le copie di sviluppo con Git.
 

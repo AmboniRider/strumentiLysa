@@ -121,13 +121,25 @@ def test_release_selects_stable_and_ignores_drafts(monkeypatch, package):
              "assets": [{"name": "update-manifest.json", "browser_download_url": manifest["package"]["url"] + ".json"}]}
     entries = [{**entry, "tag_name": "v99.0.0", "draft": True},
                {**entry, "tag_name": "v98.0.0", "prerelease": True}, entry]
-    monkeypatch.setattr(service, "download", lambda url, limit: json.dumps(entries if url == service.API else manifest).encode())
+    monkeypatch.setattr(service, "download", lambda url, limit, **kwargs: json.dumps(entries if url == service.API else manifest).encode())
     assert check_release("1.1.0").version == __version__
     assert check_release(__version__) is None
 
 
+def test_metadata_checks_use_short_budget(monkeypatch, package):
+    """Elenco Release e manifest non ereditano il budget lungo dello ZIP."""
+    manifest, _ = package
+    entries = [{"tag_name": "v" + __version__, "html_url": "https://github.com/release",
+                "assets": [{"name": "update-manifest.json",
+                            "browser_download_url": manifest["package"]["url"] + ".json"}]}]
+    mocked = Mock(side_effect=[json.dumps(entries).encode(), json.dumps(manifest).encode()])
+    monkeypatch.setattr(service, "download", mocked)
+    assert check_release("2.0.0").version == __version__
+    assert [call.kwargs["timeout"] for call in mocked.call_args_list] == [service.CHECK_TIMEOUT] * 2
+
+
 def test_empty_release_list_and_network_failure(monkeypatch):
-    monkeypatch.setattr(service, "download", lambda *args: b"[]")
+    monkeypatch.setattr(service, "download", lambda *args, **kwargs: b"[]")
     assert check_release() is None
     monkeypatch.setattr(service, "download", Mock(side_effect=TimeoutError))
     with pytest.raises(UpdateError, match="connessione"):
@@ -135,7 +147,7 @@ def test_empty_release_list_and_network_failure(monkeypatch):
 
 
 def test_missing_manifest_blocks_update(monkeypatch):
-    monkeypatch.setattr(service, "download", lambda *args: b'[{"tag_name":"v99.0.0","assets":[]}]')
+    monkeypatch.setattr(service, "download", lambda *args, **kwargs: b'[{"tag_name":"v99.0.0","assets":[]}]')
     with pytest.raises(UpdateError, match="manifest"):
         check_release()
 

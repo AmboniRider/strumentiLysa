@@ -12,9 +12,11 @@ import re
 import os
 import platform
 import shutil
+import ssl
 import sys
 import time
 from urllib.parse import urlparse
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from zipfile import ZipFile
 
@@ -24,6 +26,9 @@ REPOSITORY = "AmboniRider/strumentiLysa"
 API = f"https://api.github.com/repos/{REPOSITORY}/releases"
 SCHEMA_VERSION = DATABASE_SCHEMA_VERSION
 MAX_DOWNLOAD = 100 * 1024 * 1024
+CHECK_TIMEOUT = 10
+PACKAGE_TIMEOUT = 300
+SOCKET_TIMEOUT = 10
 # Elenco esplicito: un aggiornamento non può sovrascrivere dati o strumenti locali.
 ROOT_FILES = {"app.py", "driver.py", "pyproject.toml", "uv.lock", "LICENSE",
               "strumenti.ico", "manuale.md", "progetto.md", "transfer.md",
@@ -63,23 +68,71 @@ def trusted_url(url: str) -> bool:
             parsed.path.startswith(f"/{REPOSITORY}/releases/download/"))
 
 
-def download(url: str, maximum: int = MAX_DOWNLOAD) -> bytes:
-    """Scarica con timeout e limiti di dimensione, senza credenziali locali."""
+def create_tls_context() -> ssl.SSLContext:
+    """Usa su Windows la catena di fiducia nativa, mantenendo verifica e hostname.
+
+    Il solo caricamento degli store CA/ROOT in OpenSSL non recupera gli
+    intermedi mancanti come CryptoAPI. Il contesto resta locale al downloader:
+    non altera ssl globalmente né la configurazione dei certificati del PC.
+    """
+    if sys.platform == "win32":
+        try:
+            import truststore
+        except ImportError as exc:
+            raise UpdateError(
+                "Componente TLS Windows mancante: eseguire installa.bat "
+                "oppure uv sync --locked per riallineare le dipendenze."
+            ) from exc
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    return ssl.create_default_context()
+
+
+def network_error_message(exc: Exception) -> str:
+    """Descrive la categoria dell'errore senza esporre URL o credenziali proxy."""
+    reason = exc.reason if isinstance(exc, URLError) else exc
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        detail = getattr(reason, "verify_message", None) or str(reason)
+        return (
+            "Connessione HTTPS a GitHub non verificabile: errore del certificato. "
+            "Controllare certificati attendibili, aggiornamenti Windows ed eventuale "
+            f"proxy aziendale. Dettaglio TLS: {detail}"
+        )
+    if isinstance(exc, HTTPError):
+        return (
+            f"GitHub ha risposto con errore HTTP {exc.code}. "
+            "Controllare accesso di rete e limiti delle richieste, poi riprovare."
+        )
+    if isinstance(reason, TimeoutError):
+        return "Tempo massimo superato durante il controllo o download da GitHub. Controllare la connessione e riprovare."
+    return "Impossibile verificare GitHub. Controllare la connessione e riprovare."
+
+
+def download(url: str, maximum: int = MAX_DOWNLOAD, *, timeout: float = PACKAGE_TIMEOUT) -> bytes:
+    """Scarica bytes verificati con limite di dimensione e timeout totale finito.
+
+    timeout è il budget complessivo: breve per i metadati, più ampio per lo ZIP.
+    Ogni attesa sul socket mantiene comunque un limite di inattività separato.
+    """
     request = Request(url, headers={"User-Agent": "StrumentiLysa-Updater", "Accept": "application/vnd.github+json"})
     chunks: list[bytes] = []
     size = 0
-    deadline = time.monotonic() + 10
-    with urlopen(request, timeout=10) as response:
-        while True:
-            if time.monotonic() > deadline:
-                raise TimeoutError("Timeout durante il controllo o download")
-            chunk = response.read(min(65536, maximum + 1 - size))
-            if not chunk:
-                break
-            size += len(chunk)
-            if size > maximum:
-                raise UpdateError("Download superiore al limite consentito")
-            chunks.append(chunk)
+    deadline = time.monotonic() + timeout
+    try:
+        with urlopen(request, timeout=min(SOCKET_TIMEOUT, timeout), context=create_tls_context()) as response:
+            while True:
+                if time.monotonic() > deadline:
+                    raise TimeoutError("Timeout durante il controllo o download")
+                chunk = response.read(min(65536, maximum + 1 - size))
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > maximum:
+                    raise UpdateError("Download superiore al limite consentito")
+                chunks.append(chunk)
+    except (URLError, OSError) as exc:
+        # La causa concatenata resta disponibile per il traceback diagnostico,
+        # mentre il pannello riceve un messaggio utile anche senza console.
+        raise UpdateError(network_error_message(exc)) from exc
     return b"".join(chunks)
 
 
@@ -141,7 +194,7 @@ def validate_manifest(data: dict, expected_version: str) -> dict:
 def check_release(current: str = __version__) -> Release | None:
     """Consulta solo Release pubblicate stabili; nessun risultato è un caso normale."""
     try:
-        releases = json.loads(download(API, 2 * 1024 * 1024))
+        releases = json.loads(download(API, 2 * 1024 * 1024, timeout=CHECK_TIMEOUT))
         candidates = []
         for entry in releases:
             if entry.get("draft") or entry.get("prerelease"):
@@ -158,12 +211,13 @@ def check_release(current: str = __version__) -> Release | None:
         asset = next((a for a in entry.get("assets", []) if a["name"] == "update-manifest.json"), None)
         if asset is None or not trusted_url(asset["browser_download_url"]):
             raise UpdateError("La nuova Release non contiene un manifest di aggiornamento valido")
-        manifest = validate_manifest(json.loads(download(asset["browser_download_url"], 1024 * 1024)), entry["tag_name"])
+        manifest = validate_manifest(json.loads(download(asset["browser_download_url"], 1024 * 1024,
+                                                        timeout=CHECK_TIMEOUT)), entry["tag_name"])
         return Release(manifest["version"], entry.get("body") or "", entry["html_url"], manifest)
     except UpdateError:
         raise
     except Exception as exc:
-        raise UpdateError("Impossibile verificare GitHub. Controllare la connessione e riprovare.") from exc
+        raise UpdateError(network_error_message(exc)) from exc
 
 
 def stage_release(release: Release, root: Path, schema: int, reset_confirmed: bool = False) -> Path:
