@@ -375,24 +375,42 @@ class Database:
         return True, "Ruolo utente aggiornato"
 
     def delete_user(self, user_id: int, current_user_id: int) -> tuple[bool, str]:
-        """Elimina un utente (impedisce l'auto-eliminazione e l'eliminazione dell'ultimo admin)."""
+        """Elimina l'account indicato conservandone lo storico delle operazioni.
+
+        ``user_id`` identifica l'account da rimuovere; ``current_user_id`` quello
+        in sessione, protetto dall'auto-eliminazione insieme all'ultimo admin.
+        Restituisce esito e messaggio per la GUI, anche in caso di errore SQLite.
+        """
         if user_id == current_user_id:
             return False, "Non puoi eliminare il tuo stesso account"
 
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-            row = cursor.fetchone()
-            if not row:
-                return False, "Utente non trovato"
+        try:
+            with self.get_connection() as conn:
+                # Acquisiamo il lock prima dei controlli: un'altra connessione non
+                # deve cambiare gli amministratori fra il conteggio e il DELETE.
+                conn.execute("BEGIN IMMEDIATE")
+                cursor = conn.cursor()
+                cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+                row = cursor.fetchone()
+                if not row:
+                    return False, "Utente non trovato"
 
-            if row["role"] == "ADMIN":
-                cursor.execute("SELECT COUNT(*) AS admin_count FROM users WHERE role = 'ADMIN'")
-                if cursor.fetchone()["admin_count"] <= 1:
-                    return False, "Impossibile eliminare l'unico utente Amministratore rimasto"
+                if row["role"] == "ADMIN":
+                    cursor.execute("SELECT COUNT(*) AS admin_count FROM users WHERE role = 'ADMIN'")
+                    if cursor.fetchone()["admin_count"] <= 1:
+                        return False, "Impossibile eliminare l'unico utente Amministratore rimasto"
 
-            cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
-            conn.commit()
+                # Il nome nell'audit è già uno snapshot indipendente dall'account.
+                # Scolleghiamo soltanto l'ID nullable, preservando tutti gli eventi
+                # e rispettando anche lo schema dei database già installati.
+                cursor.execute("UPDATE audit_logs SET user_id = NULL WHERE user_id = ?", (user_id,))
+                cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            # Il context manager conferma entrambe le scritture insieme; qualsiasi
+            # eccezione provoca il rollback prima di restituire l'errore alla GUI.
+        except sqlite3.IntegrityError:
+            return False, "Impossibile eliminare l'utente: altri dati del database fanno riferimento all'account. Nessuna modifica effettuata."
+        except sqlite3.DatabaseError:
+            return False, "Impossibile eliminare l'utente per un errore del database. Nessuna modifica effettuata. Riprovare o contattare l'amministratore."
         return True, "Utente eliminato con successo"
 
     # =========================================================================

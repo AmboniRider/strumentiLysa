@@ -43,6 +43,8 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
   - `models.py`: Dataclass condivise per campioni, risultati, utenti, transcodifiche e filtri; contratto dati fra driver, servizi, database e GUI.
   - `importer_service.py`: Scansione manuale della cartella input, parsing mono/multi-campione, validazione, merge e archiviazione dei file.
   - `database.py`: Connessione, schema DDL, repository e migrazioni SQLite.
+    Eliminazione utenti con scollegamento dei soli `audit_logs.user_id`, storico
+    preservato e gestione transazionale degli errori SQLite per la GUI.
   - `auth.py`: Gestione sicurezza, hashing password (SHA-256 + salt), sessione e ruoli (`ADMIN`, `OPERATORE`).
   - `config.py`: Gestione impostazioni applicative e percorsi cartelle.
   - `exporter.py`: Generatore file CSV standard per il LIS (24 colonne).
@@ -51,6 +53,10 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - `driver_implementati/`: Documentazione tecnico-operativa approfondita per ciascun driver implementato ([README.md](file:///d:/pyprg/strumenti/driver_implementati/README.md), [dionex_ic.md](file:///d:/pyprg/strumenti/driver_implementati/dionex_ic.md), [mettler_toledo.md](file:///d:/pyprg/strumenti/driver_implementati/mettler_toledo.md), [spettrofotometro_uv_vis.md](file:///d:/pyprg/strumenti/driver_implementati/spettrofotometro_uv_vis.md)).
 
 ## Development Conventions
+- Eliminazione utenti: preservare eventi, nomi, dettagli e timestamp dell'audit.
+  Azzerare il riferimento nullable all'account e cancellarlo nella stessa
+  transazione; rollback completo e messaggio applicativo se un vincolo o un
+  errore SQLite impedisce l'operazione. Nessuna migrazione necessaria.
 - Evidenza esami limitata al dettaglio: righe spuntate verdi e in grassetto;
   righe già inviate non spuntate grigie; la selezione prevale per il reinvio.
   Tag e font locali a `ExamDetail.Treeview`, senza modificare gli stili delle
@@ -94,6 +100,13 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - Nessuna perdita accidentale di dati originali (i file elaborati vengono archiviati, non cancellati).
 
 ## Current Status & Active TODO
+- **2026-10-16 — Eliminazione utenti corretta**: riprodotto su copia reale il
+  vincolo `audit_logs.user_id` che impediva la cancellazione. Corretto
+  `Database.delete_user()` con conservazione dello storico, controlli protettivi
+  e gestione errori. **15 test superati** (10 nuovi e 5 database esistenti),
+  incluso callback GUI. Su conferma esplicita eliminato `mascheroni` (ID 2)
+  dal database operativo: 21 eventi preservati, tutti gli altri dati invariati,
+  controlli di integrità e chiavi esterne superati.
 - **2026-10-16 — Versione 1.1**: versione applicativa predefinita e valore
   dell'installazione locale aggiornati da 1.0 a 1.1; metadati del pacchetto,
   `src.__version__` e lockfile allineati a 1.1.0. Verificati lockfile,

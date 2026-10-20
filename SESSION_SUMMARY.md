@@ -1,5 +1,52 @@
 # SESSION SUMMARY
 
+## Sincronizzazione GitHub — 2026-10-20
+### Decisions and Activities
+- Verificate le modifiche locali a database, test di eliminazione utenti e
+  documentazione; preparata la pubblicazione sul ramo `main` di `origin`.
+- Rieseguiti i test mirati con uv offline: **15 passed in 7.06s**.
+- `git diff --check` superato; sincronizzazione senza push forzato.
+### Issues and Solutions
+- Scrittura dei metadati Git inizialmente limitata dalla sandbox: eseguito
+  il recupero remoto con autorizzazione elevata.
+
+## Eliminazione utenti con riferimenti nello storico — 2026-10-16
+### Decisions and Activities
+- Analizzati repository, `Database.delete_user()`, callback impostazioni e schema
+  operativo. Il riferimento a `users` è `audit_logs.user_id`, nullable ma senza
+  azione automatica di scollegamento all'eliminazione dell'account.
+- Acquisita una copia consistente tramite SQLite Backup API con sorgente aperta
+  in sola lettura. Riprodotto `IntegrityError: FOREIGN KEY constraint failed`
+  per l'utente presente `mascheroni`, con 21 eventi collegati.
+- `src/database.py`: azzeramento dei soli riferimenti nell'audit e cancellazione
+  dell'account nella stessa transazione, aperta prima dei controlli protettivi.
+  Conservati nome operatore, azioni, dettagli e timestamp. Gli errori SQLite
+  restituiscono un esito negativo e un messaggio alla GUI dopo il rollback.
+  Nessuna modifica allo schema; confermati i blocchi su auto-eliminazione e
+  ultimo amministratore.
+- `tests/test_user_deletion.py`: 10 casi per storico, account senza eventi,
+  protezioni, secondo amministratore, rollback per ulteriori vincoli, database
+  indisponibile e callback GUI nei percorsi di successo/errore.
+- Verifica riproducibile: `uv --offline --no-cache run --no-sync python -m pytest
+  tests/test_user_deletion.py tests/test_database.py -q -p no:cacheprovider
+  --basetemp=.pytest-user-delete-check --tb=short`, con TMP/TEMP nella cartella
+  locale `.pytest-user-delete-uvtmp`: **15 passed in 6.63s**.
+- Collaudo della correzione sulla copia reale: comparate tutte le righe di tutte
+  le tabelle, comprese le sequenze; sole differenze attese in `users` e negli ID
+  dell'audit. `integrity_check=ok`, nessuna violazione in `foreign_key_check`.
+- L'utente ha confermato che il nome inteso era `mascheroni`, autorizzandone la
+  cancellazione reale dopo la verifica. Eseguito `delete_user(2, 1)` sul database
+  già inizializzato, senza seed o migrazioni. Account eliminato; tutti i 21 eventi
+  conservati con nome originale. Verificato che altri account, campioni,
+  risultati, configurazioni, transcodifiche e sequenze siano rimasti invariati;
+  superati anche i controlli di integrità e delle chiavi esterne sul database reale.
+- Aggiornati `PROJECT_CONTEXT.md` e questo riepilogo.
+### Issues and Solutions
+- `mascherano` non era presente: rilevato `mascheroni` e ottenuta conferma esplicita
+  dell'identità prima di intervenire sui dati reali.
+- Il primo comando uv ha incontrato accesso negato al temporaneo della sandbox;
+  risolto impostando TMP/TEMP in una cartella temporanea locale al progetto.
+
 ## Preparazione sincronizzazione GitHub — 2026-10-16
 ### Decisions and Activities
 - Richiesto l'aggiornamento del repository GitHub con tutte le modifiche locali,
