@@ -40,8 +40,9 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - `maintenance.py`: migrazione su copia, nuovo database con recupero completo
   della configurazione e collaudo nascosto del vero avvio GUI.
 - `build_release.py` / `.github/workflows/release.yml`: ZIP aggiornamento senza
-  database e manifest formato 1; verifica su Windows e creazione di bozza Release
-  da tag stabile. `UPDATES.md` descrive adozione, backup e pubblicazione.
+  database e manifest formato 1; verifica su Windows e pubblicazione di Release
+  da tag stabile. Il workflow su `main` può essere avviato anche per un tag
+  esistente. `UPDATES.md` descrive adozione, backup e pubblicazione.
 - `driver.py`: include `Agilent5977CDriver`, CSV tabulare multi-campione riconosciuto
   dal contenuto; prima riga utile per codice e controlli esclusi tramite validatore.
 - `ParsedBatch` in `src/models.py`: campioni, avvisi di riga e archiviazione vuota;
@@ -143,8 +144,10 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
   allineati a 2.0.0. Note di rilascio organizzate in gestione sostanze,
   aggiornamenti, licenza/responsabilità, revisione UI e correzioni. Schema 1
   conservato, migrazione 0→1 senza perdita: nessun database nuovo necessario.
-  Pubblicazione richiesta dall'utente tramite tag stabile e workflow Windows
-  che pubblica ZIP e manifest solo dopo test e build superati.
+  Pubblicata la Release stabile `v2.0.0` con ZIP e manifest dopo **178 test
+  superati su GitHub Windows**. Download verificato tramite il client updater:
+  39 file runtime, CRC e checksum SHA-256 coerenti, nessun database incluso.
+  URL: https://github.com/AmboniRider/strumentiLysa/releases/tag/v2.0.0
 - **2026-10-20 — Licenza e responsabilità**: aggiunta la frase sul supporto
   operativo e sulla verifica autonoma dei risultati; autore nei metadati,
   documentazione e sorgenti. Nuova voce nel menu principale con disclaimer,

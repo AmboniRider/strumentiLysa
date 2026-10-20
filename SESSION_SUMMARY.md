@@ -32,6 +32,18 @@
   `sequenze`/`archiviati`, esclusi correttamente da Git. Reso il test autonomo
   con dati sintetici in `tmp_path`; il workflow prepara fixture sintetiche per
   poter verificare anche il tag esistente senza modificarlo o pubblicare dati locali.
+- Pubblicazione completata: workflow GitHub **39385705092**, esito `success`,
+  **178 passed in 45.66s** sul runner Windows, inclusa installazione completa.
+  Release pubblica stabile (non draft, non prerelease):
+  https://github.com/AmboniRider/strumentiLysa/releases/tag/v2.0.0
+- Asset pubblicati: `strumenti-update-2.0.0.zip` (277714 byte, 39 file runtime)
+  e `update-manifest.json` (4236 byte). Verificati tramite lo stesso client
+  updater dell'app: scoperta della 2.0.0 da versione 1.1.0, CRC, hash ZIP e
+  digest di tutti i file. Nessun database, backup o metadato Git nell'archivio.
+  SHA-256 ZIP: `6e28c2aab4a1d322e76cb01efcc70bfb9bea7c08f63674f2fc93ea048bfc8d4c`.
+- Tag annotato `v2.0.0` conservato sul commit di rilascio `312cf57`; correzioni
+  di automazione e test sincronizzate successivamente su `main`, senza reset,
+  spostamenti del tag o push forzati. Database operativo non modificato.
 
 ## Licenza, responsabilità e attribuzione — 2026-10-20
 ### Decisions and Activities
