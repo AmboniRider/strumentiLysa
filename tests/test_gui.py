@@ -5,10 +5,13 @@ in particolare il filtro di stato predefinito impostato su 'Da Esportare'.
 """
 
 from pathlib import Path
+from unittest.mock import Mock
 import customtkinter as ctk
 import pytest
 
+from src import __version__
 from src.auth import SessionManager
+from src.config import AppConfig
 from src.database import Database
 from src.gui.master_detail import MasterDetailView
 from src.gui.settings_dialog import SettingsDialog
@@ -71,6 +74,80 @@ def test_master_detail_default_status_filter(test_db: Database, admin_user: User
     finally:
         for child in ctk_root.winfo_children():
             child.destroy()
+
+
+@pytest.mark.parametrize("changed_path", ["input", "archive", "error", "export", "all"])
+def test_settings_dialog_saves_paths(
+    test_db: Database,
+    admin_user: UserRecord,
+    ctk_root: ctk.CTk,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    changed_path: str,
+) -> None:
+    """Salva ogni percorso dal pulsante reale e conserva le altre impostazioni."""
+    path_names = ("input", "archive", "error", "export")
+    original_paths = {name: tmp_path / "originali" / name for name in path_names}
+    test_db.save_all_configs(AppConfig(
+        **{f"{name}_dir": path for name, path in original_paths.items()},
+        allowed_labs="BG,MI",
+        default_driver="Agilent 5977C",
+    ))
+    # Un valore storico nel DB non deve rendere nuovamente editabile la versione.
+    test_db.save_config_value("app_version", "99.0")
+    on_changed = Mock(side_effect=test_db.get_config)
+    showinfo = Mock()
+    monkeypatch.setattr("src.gui.settings_dialog.messagebox.showinfo", showinfo)
+
+    SessionManager.set_user(admin_user)
+    dialog = SettingsDialog(ctk_root, test_db, on_config_changed=on_changed)
+    try:
+        expected_paths = original_paths.copy()
+        for name in path_names:
+            if changed_path in (name, "all"):
+                expected_paths[name] = tmp_path / "nuove cartelle è" / name
+                entry = getattr(dialog, f"entry_{name}")
+                entry.delete(0, "end")
+                entry.insert(0, f"  {expected_paths[name]}  ")
+
+        # Le altre schede possono aver salvato valori dopo l'apertura del dialogo.
+        test_db.save_config_value("allowed_labs", "BG,MI,ZZ")
+        test_db.save_config_value("default_driver", "Titolatore Mettler Toledo")
+        assert not hasattr(dialog, "entry_version")
+        tab = dialog.tabview.tab("📁 Percorsi Cartelle")
+        save_button = next(
+            widget for widget in tab.winfo_children()
+            if isinstance(widget, ctk.CTkButton) and "Salva Percorsi" in widget.cget("text")
+        )
+        save_button.invoke()
+
+        # Una nuova connessione e un nuovo dialogo devono rileggere i valori salvati.
+        reloaded = Database(test_db.db_path).get_config()
+        for name, path in expected_paths.items():
+            assert getattr(reloaded, f"{name}_dir") == path
+            assert path.is_dir()
+        assert reloaded.allowed_labs_str == "BG,MI,ZZ"
+        assert reloaded.default_driver == "Titolatore Mettler Toledo"
+        assert reloaded.app_version == __version__
+        assert dialog.version_label.cget("text") == __version__
+        on_changed.assert_called_once_with()
+        showinfo.assert_called_once_with(
+            "Configurazione", "Percorsi cartelle salvati con successo!", parent=dialog
+        )
+        with test_db.get_connection() as conn:
+            events = conn.execute(
+                "SELECT user_id, username FROM audit_logs WHERE action = 'CONFIG_PATHS_UPDATE'"
+            ).fetchall()
+        assert [(row["user_id"], row["username"]) for row in events] == [
+            (admin_user.id, admin_user.username)
+        ]
+        dialog.destroy()
+        dialog = SettingsDialog(ctk_root, test_db)
+        for name, path in expected_paths.items():
+            assert getattr(dialog, f"entry_{name}").get() == str(path)
+    finally:
+        dialog.destroy()
+        SessionManager.logout()
 
 
 def test_settings_dialog_grid_sorting(test_db: Database, admin_user: UserRecord, ctk_root: ctk.CTk):

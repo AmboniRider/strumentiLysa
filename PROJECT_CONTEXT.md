@@ -24,6 +24,9 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - **Licenza & Compatibilità**: Pienamente compatibile con GNU AGPLv3 (tutte le dipendenze esterne dirette e indirette adottano licenze permissive compatibili: MIT, BSD-3-Clause, BSD-2-Clause, Apache-2.0, HPND/MIT-CMU, PSF License; codice sorgente interno 100% originale privo di componenti proprietari terzi).
 
 ## Main Components
+- `src/gui/settings_dialog.py`: configurazione amministrativa per schede;
+  il salvataggio delle cartelle rilegge `AppConfig` dal database e modifica
+  solo i quattro percorsi, preservando driver, laboratori e versione effettiva.
 - `LEGAL.md` / `src/gui/license_dialog.py`: disclaimer completo, attribuzione
   all'autore Amboni Paolo A., repository pubblico e testo integrale `LICENSE`.
   Menu principale accessibile anche prima del login e a entrambi i ruoli;
@@ -144,6 +147,15 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - Nessuna perdita accidentale di dati originali (i file elaborati vengono archiviati, non cancellati).
 
 ## Current Status & Active TODO
+- **2026-10-20 — Patch release 2.0.1**: versione, metadati e lockfile allineati;
+  note dedicate alla correzione del salvataggio percorsi, con conservazione di
+  driver e laboratori. Schema database 1 invariato; pubblicazione tramite il
+  workflow Windows dopo i controlli automatici sul tag `v2.0.1`.
+- **2026-10-20 — Salvataggio percorsi corretto**: eliminato il riferimento al
+  campo rimosso `entry_version`; la versione resta in sola lettura e driver e
+  laboratori configurati non vengono reimpostati. **22 test mirati superati**,
+  inclusi cinque casi sul pulsante reale (quattro cartelle singole e tutte insieme),
+  creazione directory, rilettura dal DB e riapertura del dialogo.
 - **2026-10-20 — Major release 2.0.0**: versione effettiva, pyproject e lockfile
   allineati a 2.0.0. Note di rilascio organizzate in gestione sostanze,
   aggiornamenti, licenza/responsabilità, revisione UI e correzioni. Schema 1

@@ -1,54 +1,34 @@
-# Strumenti LYSA 2.0.0 — Major release
+# Strumenti LYSA 2.0.1 — Bug fix
 
 **Autore:** Amboni Paolo A.
 
-La versione 2.0 raccoglie l'evoluzione delle funzionalità di laboratorio,
-degli aggiornamenti e dell'interfaccia.
+## Correzioni
 
-## Novità principali
-
-- **Gestione delle sostanze:** associazione dei parametri a codice esame e
-  codice sostanza LIS, con controllo di completezza e coerenza del catalogo
-  prima dell'esportazione. Il tracciato LIS resta di 24 colonne separate da `;`.
-- **Gestione degli aggiornamenti:** controllo delle Release GitHub all'avvio,
-  pannello ADMIN **Aggiornamenti e backup**, copie complete verificate e
-  installazione con ripristino automatico in caso di errore.
-- **Aggiornamento licenza e responsabilità:** attribuzione all'autore,
-  disclaimer sul supporto operativo e sulla verifica autonoma dei risultati;
-  menu **Licenza e responsabilità** con testo integrale AGPLv3 e repository,
-  disponibile per tutti gli utenti anche prima del login.
-- **Revisione dell'interfaccia:** stato visivo degli esami selezionati e già
-  inviati, pannelli informativi e versione effettiva del software in sola lettura.
-- **Correzione di alcuni bug:** rispetto delle selezioni durante esportazione
-  e reinvio, cancellazione degli utenti con conservazione dello storico audit,
-  creazione di `admin` / `admin` se manca l'account e aggiornamento del titolo
-  senza ricreare la schermata di login.
+- Corretto il pulsante **Salva Percorsi** in **Configurazione → Percorsi
+  Cartelle**: il salvataggio non tenta più di leggere il campo della versione
+  rimosso e non genera l'errore `AttributeError: entry_version`.
+- I nuovi percorsi vengono salvati e riproposti alla riapertura della finestra.
+  Driver e codici laboratorio già configurati vengono preservati, anche se
+  modificati nelle altre schede durante la stessa sessione.
+- La versione software resta in sola lettura e deriva dal programma installato.
 
 ## Database e compatibilità
 
-**Migrazione senza perdita di dati. Non è richiesto un database nuovo.**
-Lo schema storico non versionato (0) viene portato allo schema 1; uno schema 1
-esistente viene mantenuto. Utenti, password, impostazioni, transcodifiche,
-campioni, risultati e audit vengono conservati. Prima dell'aggiornamento sono
-previsti backup completo e salvataggio dei canali già codificati.
-
-Questa major release non cambia la licenza del progetto: resta
-**GNU Affero General Public License versione 3 o successiva (AGPL-3.0-or-later)**.
+Nessun database nuovo richiesto. Lo schema resta **1** e i dati esistenti
+vengono conservati. Per le installazioni storiche con schema 0 resta disponibile
+la migrazione senza perdita allo schema 1.
 
 ## Installazione
 
-- Per le postazioni con updater: usare **Impostazioni → Aggiornamenti e backup**.
-- Per le versioni precedenti prive di updater: chiudere l'applicazione, salvare
-  database e transcodifiche, quindi sovrapporre i soli file dello ZIP
-  `strumenti-update-2.0.0.zip` e riallineare le dipendenze con `installa.bat`.
-  Conservare `data/strumenti.db` e tutte le cartelle operative.
-- Le copie di sviluppo con `.git` si aggiornano tramite il normale flusso Git.
+- Postazioni con updater: **Impostazioni → Aggiornamenti e backup**.
+- Versioni prive di updater: chiudere il programma, salvare database e
+  transcodifiche e sovrapporre i soli file di `strumenti-update-2.0.1.zip`;
+  eseguire `installa.bat` per riallineare le dipendenze. Conservare
+  `data/strumenti.db` e tutte le cartelle operative.
+- Copie di sviluppo con `.git`: usare il normale flusso Git.
 
-Non utilizzare lo ZIP di trasferimento con database ripulito per sovrascrivere
-una postazione esistente. Il pacchetto di aggiornamento non contiene database
-operativi, backup, credenziali o dati di laboratorio.
+Il pacchetto di aggiornamento non contiene database o dati di laboratorio.
+Non usare lo ZIP di trasferimento con database ripulito per aggiornare una
+postazione esistente.
 
-Installazione automatica per Windows x64, Python 3.11–3.13 e uv locale; Internet
-necessario per l'aggiornamento, utilizzo ordinario disponibile offline.
-
-Dettagli: [UPDATES.md](https://github.com/AmboniRider/strumentiLysa/blob/v2.0.0/UPDATES.md).
+Dettagli: [UPDATES.md](https://github.com/AmboniRider/strumentiLysa/blob/v2.0.1/UPDATES.md).

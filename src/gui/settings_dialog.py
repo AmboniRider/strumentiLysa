@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import customtkinter as ctk
 from datetime import datetime, timedelta
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Any, Callable, Dict, List, Optional
 
 from src.auth import SessionManager
-from src.config import DEFAULT_APP_VERSION, AppConfig
+from src.config import DEFAULT_APP_VERSION
 from src.database import Database
 from src.gui.theme import (
     COLOR_DANGER,
@@ -322,14 +323,14 @@ class SettingsDialog(ctk.CTkToplevel):
             entry.insert(0, selected)
 
     def _save_paths(self) -> None:
-        new_version = self.entry_version.get().strip() or DEFAULT_APP_VERSION
-        cfg = AppConfig(
-            input_dir=self.entry_input.get().strip(),
-            archive_dir=self.entry_archive.get().strip(),
-            error_dir=self.entry_error.get().strip(),
-            export_dir=self.entry_export.get().strip(),
-            app_version=new_version,
-        )
+        """Salva le quattro cartelle preservando le impostazioni delle altre schede."""
+        # Rilegge la configurazione corrente: driver e laboratori possono essere
+        # cambiati dalle altre schede; la versione è gestita dal codice installato.
+        cfg = self.db.get_config()
+        cfg.input_dir = Path(self.entry_input.get().strip())
+        cfg.archive_dir = Path(self.entry_archive.get().strip())
+        cfg.error_dir = Path(self.entry_error.get().strip())
+        cfg.export_dir = Path(self.entry_export.get().strip())
         cfg.ensure_directories()
         self.db.save_all_configs(cfg)
         curr_user = SessionManager.get_user()

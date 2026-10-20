@@ -21,7 +21,9 @@ Supporta Dionex IC, Mettler Toledo e UV-Vis tramite driver dedicati.
 - **Correzione di bug:** selezioni di esportazione, eliminazione utenti con
   conservazione dell'audit, primo accesso e aggiornamento del titolo finestra.
 
-La versione tecnica è **2.0.0**. L'aggiornamento conserva il database e i dati:
+La versione tecnica è **2.0.1**. Corretto il salvataggio dei percorsi nelle
+impostazioni, preservando driver e codici laboratorio configurati.
+L'aggiornamento conserva il database e i dati:
 non occorre scaricare un database nuovo. Dettagli in [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
 La voce **Licenza e responsabilità** nel menu principale permette a tutti gli

@@ -1,5 +1,55 @@
 # SESSION SUMMARY
 
+## Patch release 2.0.1 — 2026-10-20
+### Decisions and Activities
+- Richiesta esplicita di avanzare a 2.0.1, sincronizzare e pubblicare su GitHub
+  la correzione del salvataggio percorsi. Ambito: codice e test del bug fix,
+  versione in `src/__init__.py`, pyproject e lockfile, note e guide aggiornate.
+- Note di rilascio concentrate su Salva Percorsi e conservazione delle altre
+  impostazioni. Schema 1 e politica di migrazione senza perdita invariati.
+- Verificato il remoto: `origin/main` coincide con il commit locale precedente
+  `6fd9549`; tag `v2.0.1` assente prima della pubblicazione.
+### Issues and Solutions
+- La sandbox non risolve github.com: verifiche e pubblicazione Git effettuate
+  con esecuzione autorizzata fuori dalla sandbox, senza salvare credenziali.
+- Verifiche locali: **182 test superati in 69.71s**, con il collaudo Windows
+  escluso dalla suite ordinaria ed eseguito separatamente: **1 passed in 39.36s**.
+  Totale 183 casi verificati. Superati anche `uv lock --check` e `git diff --check`.
+- Generato `dist/release-2.0.1/`: ZIP con 39 file runtime, 278302 byte;
+  verificati manifest, CRC e digest di ogni file, correzione inclusa e assenza
+  di database. SHA-256 ZIP locale:
+  `0a7804a4da6c72c73917457e1a6f0b0b7772b8d5db6f534f5f8b746c6858580b`.
+- Pubblicazione predisposta tramite sincronizzazione `main` e tag annotato
+  `v2.0.1`; il workflow verifica nuovamente la suite completa prima della Release.
+
+## Salvataggio percorsi nelle impostazioni — 2026-10-20
+### Decisions and Activities
+- Analizzati `SettingsDialog`, `AppConfig`, persistenza SQLite e test GUI/versione.
+  Riprodotto l'`AttributeError` segnalato invocando il vero pulsante Salva Percorsi
+  in un test con database temporaneo.
+- `_save_paths()` rilegge la configurazione corrente e aggiorna i soli quattro
+  percorsi. Conservati driver e laboratori eventualmente salvati dalle altre
+  schede; la versione continua a provenire dal codice installato.
+- Aggiunti cinque casi parametrizzati in `tests/test_gui.py`: modifica di ogni
+  cartella e di tutte insieme, spazi/caratteri accentati, creazione directory,
+  persistenza e riapertura del dialogo, callback, messaggio di successo e audit.
+  Aggiornato `PROJECT_CONTEXT.md` con il comportamento del pannello.
+### Issues and Solutions
+- Il campo editabile `entry_version` era stato sostituito da `version_label`,
+  ma il callback tentava ancora di leggerlo. Eliminata questa dipendenza.
+- La costruzione di un nuovo `AppConfig` con i soli percorsi avrebbe inoltre
+  reimpostato driver e laboratori ai valori predefiniti: riutilizzata invece la
+  configurazione appena letta dal database.
+- `uv` non poteva scrivere nella directory temporanea della sandbox: usati
+  `TMP`/`TEMP` locali al progetto, senza modifiche all'ambiente permanente.
+- Verifica: `uv run pytest -q tests/test_gui.py tests/test_version_config.py
+  tests/test_database.py -p no:cacheprovider --basetemp .pytest-paths-fixed`,
+  con uv offline/no-cache/no-sync: **22 passed in 12.34s**. `git diff --check`
+  superato. Il database operativo non è stato usato nel collaudo.
+- Prova manuale: riavviare l'applicazione, aprire Configurazione → Percorsi
+  Cartelle, modificare un percorso e premere Salva Percorsi; riaprire la finestra
+  e verificare che il valore sia conservato.
+
 ## Requisiti minimi nel README — 2026-10-20
 ### Decisions and Activities
 - Aggiunti Windows 10 o successivi x64, CPU Intel/AMD, dimensionamento RAM e

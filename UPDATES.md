@@ -69,7 +69,7 @@ dal vecchio valore `app_version` nel database.
 
 Le installazioni prive dell'updater richiedono un aggiornamento manuale iniziale,
 ad applicazione chiusa, con backup completo e
-copia dei soli file del pacchetto `strumenti-update-2.0.0.zip` nell'installazione.
+copia dei soli file del pacchetto `strumenti-update-2.0.1.zip` nell'installazione.
 Eseguire nuovamente `installa.bat` per allineare le dipendenze. Conservare
 `data/strumenti.db` e tutte le cartelle operative. Lo ZIP include il nuovo
 `strumenti.bat` per abilitare il recupero da Python base.
@@ -82,7 +82,7 @@ perdita di dati.
 1. Allineare `src.__version__`, `pyproject.toml` e `uv.lock`. Modificare
    `DATABASE_SCHEMA_VERSION` solo con una migrazione consecutiva esplicita.
 2. Aggiornare `RELEASE_NOTES.md` e la politica nella chiamata a `build_release.py`
-   nel workflow. La politica predefinita 2.0.0 è `migrate`, schema sorgente 0–1,
+   nel workflow. La politica predefinita 2.0.1 è `migrate`, schema sorgente 0–1,
    schema destinazione 1. Per `reset` specificare sempre `--losses`.
 3. Eseguire `uv run python -m pytest -q` e, su Windows, il collaudo completo:
 
