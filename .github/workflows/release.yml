@@ -35,6 +35,22 @@ jobs:
         run: >-
           uv run --no-sync python -c "import os,re; from src import __version__; tag=os.environ['RELEASE_TAG'];
           assert re.fullmatch(r'v\d+\.\d+\.\d+',tag) and tag=='v'+__version__, 'Eseguire il workflow su un tag stabile allineato al codice'"
+      - name: Fixture sintetiche per i test dei tag storici
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          from trasfer import init_terminal
+          init_terminal("STRUMENTI LYSA - FIXTURE TEST CI")
+          template = Path("esempi/sequenze/BG2600104420010001.txt").read_text(encoding="utf-8")
+          directory = Path("sequenze")
+          directory.mkdir(exist_ok=True)
+          for code in ("BG2600036500010001", "BG2600036500020001", "BG2600036500030001"):
+              text = template.replace("BG2600104420010001", code)
+              content = b"".join(line.encode("utf-8").ljust(215, b"\x00") + b"\n" for line in text.splitlines())
+              with (directory / (code + ".txt")).open("xb") as output:
+                  output.write(content)
+          '@ | uv run --no-sync python -
       - run: uv run --no-sync python -m pytest -q
         env:
           STRUMENTI_UPDATE_E2E: '1'

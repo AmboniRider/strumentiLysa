@@ -80,18 +80,21 @@ def test_available_drivers_and_selection():
     assert isinstance(drv, DionexICDriver)
 
 
-def test_driver_handles_null_padded_files():
-    """Verifica che il driver gestisca e sanitizzi correttamente i file con byte nulli di padding."""
-    seq_dir = Path("sequenze")
-    file1 = seq_dir / "BG2600036500010001.txt"
-    if not file1.exists():
-        file1 = Path("archiviati") / "BG2600036500010001.txt"
-    file2 = seq_dir / "BG2600036500020001.txt"
-    if not file2.exists():
-        file2 = Path("archiviati") / "BG2600036500020001.txt"
-    file3 = seq_dir / "BG2600036500030001.txt"
-    if not file3.exists():
-        file3 = Path("archiviati") / "BG2600036500030001.txt"
+def test_driver_handles_null_padded_files(tmp_path: Path) -> None:
+    """Usa record sintetici da 216 byte, senza dipendere dai file operativi locali."""
+    template = SAMPLE_1_PATH.read_text(encoding="utf-8")
+    files = []
+    for code in ("BG2600036500010001", "BG2600036500020001", "BG2600036500030001"):
+        text = template.replace("BG2600104420010001", code)
+        # Il padding reale deve essere eliminato da identificativi e risultati,
+        # non soltanto ignorato dal riconoscimento del formato strumentale.
+        padded = b"".join(line.encode("utf-8").ljust(215, b"\x00") + b"\n"
+                          for line in text.splitlines())
+        path = tmp_path / f"{code}.txt"
+        path.write_bytes(padded)
+        assert b"\x00" in padded
+        files.append(path)
+    file1, file2, file3 = files
 
     driver = DionexICDriver()
     assert driver.can_handle(file1) is True

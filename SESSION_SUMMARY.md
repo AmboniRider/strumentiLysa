@@ -28,6 +28,10 @@
   Python 3.12.13 su Windows 2025. Corretto usando `uv python install`, come nel
   pacchetto distribuito. Aggiunto avvio manuale per un tag esistente, con checkout
   esplicito del tag e senza riscriverne la storia.
+- Verifica su clone pulito: un test storico del padding NUL leggeva file da
+  `sequenze`/`archiviati`, esclusi correttamente da Git. Reso il test autonomo
+  con dati sintetici in `tmp_path`; il workflow prepara fixture sintetiche per
+  poter verificare anche il tag esistente senza modificarlo o pubblicare dati locali.
 
 ## Licenza, responsabilità e attribuzione — 2026-10-20
 ### Decisions and Activities
