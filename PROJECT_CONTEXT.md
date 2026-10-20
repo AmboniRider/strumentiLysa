@@ -127,6 +127,10 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - Visualizzazione predefinita con filtro di stato 'Da Esportare' e periodo dell'ultimo mese per mostrare prioritariamente i campioni pendenti da processare, con selettori rapidi per consultare gli esportati o l'intero storico.
 
 ## Technical Constraints
+- Requisiti della distribuzione documentati nel README: Windows 10 o successivi
+  x64 Intel/AMD, cartelle scrivibili, Internet per installazione/aggiornamento e
+  uso ordinario offline. CPU/RAM/schermo sono indicazioni di dimensionamento,
+  non benchmark; spazio libero calcolato dall'updater, con soglia base di 1 GB.
 - Windows x64 per installazione automatica; aggiornamenti richiedono Internet,
   uso ordinario disponibile offline. Nessun dato operativo caricato su GitHub.
 - Una sola istanza per cartella; installazione automatica disabilitata quando

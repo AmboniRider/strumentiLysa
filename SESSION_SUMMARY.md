@@ -1,5 +1,21 @@
 # SESSION SUMMARY
 
+## Requisiti minimi nel README — 2026-10-20
+### Decisions and Activities
+- Aggiunti Windows 10 o successivi x64, CPU Intel/AMD, dimensionamento RAM e
+  schermo, spazio libero, permessi, HTTPS e ambiente Python. Distinti requisiti
+  effettivi da raccomandazioni non misurate con benchmark.
+- Verificati installer, limiti Python dell'updater, soglia di spazio e dimensioni
+  GUI. Precisato che il pacchetto installa Python/uv e che Git serve soltanto
+  per il flusso da repository. Consultate le fonti ufficiali Microsoft e uv.
+- Richiesta la sincronizzazione su GitHub; modifica solo documentale, nessuna
+  nuova versione o modifica agli asset della Release 2.0.0.
+### Issues and Solutions
+- Evitate soglie hardware presentate come collaudate: RAM, CPU e risoluzione
+  sono indicazioni pratiche; lo spazio necessario cresce con dati e backup.
+- Verifica documentale tramite `git diff --check`, senza test applicativi non
+  pertinenti a questa modifica.
+
 ## Pubblicazione major release 2.0.0 — 2026-10-20
 ### Decisions and Activities
 - Richiesta esplicita di pubblicare la major 2.0 e sincronizzare tutte le

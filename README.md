@@ -27,9 +27,29 @@ non occorre scaricare un database nuovo. Dettagli in [RELEASE_NOTES.md](RELEASE_
 La voce **Licenza e responsabilità** nel menu principale permette a tutti gli
 utenti di consultare autore, repository, disclaimer e testo integrale AGPLv3.
 
+## Requisiti minimi e configurazione consigliata
+
+| Componente | Requisito |
+| --- | --- |
+| Sistema operativo | **Windows 10 o successivi, a 64 bit (x64)**. |
+| Processore | Intel/AMD con architettura x86-64; consigliati almeno 2 core. |
+| Memoria RAM | 4 GB come dimensionamento indicativo della postazione; consigliati 8 GB. |
+| Spazio libero | Almeno **1 GB libero per gli aggiornamenti**; consigliati almeno 2 GB iniziali, oltre allo spazio per database, file strumentali, esportazioni e backup. Il programma verifica lo spazio effettivamente necessario prima di aggiornare. |
+| Schermo | Indicativamente 1280 × 800 pixel con ridimensionamento Windows al 100%; consigliato Full HD (1920 × 1080). Con ridimensionamenti maggiori serve una risoluzione adeguata. |
+| Permessi | Lettura e scrittura nella cartella di installazione e nelle cartelle operative e di backup. |
+| Connessione Internet | Necessaria per installazione, ripristino delle dipendenze e aggiornamenti, tramite HTTPS (porta 443). L'utilizzo ordinario funziona offline. |
+| Ambiente Python | Il pacchetto con `installa.bat` configura automaticamente uv, Python **3.12.13**, Tkinter e le dipendenze. Per installazioni gestite manualmente: Python **3.11–3.13** con Tkinter e `uv`. |
+
+Le indicazioni su CPU, RAM e schermo sono criteri pratici di dimensionamento,
+non soglie minime misurate tramite benchmark. Occorre inoltre rispettare i
+[requisiti del sistema operativo installato](https://learn.microsoft.com/en-us/windows/whats-new/windows-11-requirements).
+Il pacchetto distribuito è destinato a Windows x64 Intel/AMD; Git è necessario
+solo per installare o sincronizzare una copia del repository, non per usare
+il pacchetto ZIP. Riferimento: [piattaforme supportate da uv](https://docs.astral.sh/uv/reference/policies/platforms/).
+
 ## Installazione e avvio
 
-Prerequisiti: Git e `uv`. Il repository GitHub è pubblico.
+Per l'installazione dal repository sono necessari Git e `uv`. Il repository GitHub è pubblico.
 
 ```powershell
 git clone https://github.com/AmboniRider/strumentiLysa.git
