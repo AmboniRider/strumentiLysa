@@ -42,6 +42,19 @@
   di pubblicazione esplicito: sorgenti updater, metadati/lock, test di rete,
   note e guide, contesto e riepilogo della sessione. Il file temporaneo
   `uv-edb47b099dfc4361.lock` resta escluso dal commit.
+- Pubblicati `main` e tag annotato `v2.0.2` atomicamente sul commit `c304b90`.
+  Workflow Windows **39427610950** completato con `success`; test e build
+  GitHub superati e Release stabile pubblicata (non draft, non prerelease):
+  https://github.com/AmboniRider/strumentiLysa/releases/tag/v2.0.2
+- Verifica finale dal client con HTTPS nativo: scoperta 2.0.2 dalla 2.0.1,
+  manifest valido, ZIP 282575 byte, 39 file runtime, CRC e SHA-256 di ogni file
+  corretti, versione/TLS/istruzioni Git effettivamente presenti, database assente.
+  Asset: `strumenti-update-2.0.2.zip`, `update-manifest.json`. SHA-256 pubblico:
+  `28e8a731a2edb7764dc9725dbd2046e48a24c8dabfccf094b46358dbcc86481d`.
+  I byte della build GitHub differiscono dalla build locale per la
+  normalizzazione Git dei terminatori; verificati i rispettivi manifest.
+- Esito registrato nei documenti di contesto con un commit documentale
+  successivo, senza spostare il tag della Release.
 
 ## Istruzioni Git nel pannello di errore e nelle guide — 2026-10-20
 ### Decisions and Activities

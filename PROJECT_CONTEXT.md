@@ -153,14 +153,17 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - Nessuna perdita accidentale di dati originali (i file elaborati vengono archiviati, non cancellati).
 
 ## Current Status & Active TODO
-- **2026-10-20 — Patch release 2.0.2 in preparazione**: versione e lockfile
+- **2026-10-20 — Patch release 2.0.2 pubblicata**: versione e lockfile
   allineati; nuova dipendenza runtime Windows `truststore` 0.10.5 (MIT).
   Implementati TLS nativo, errori espliciti anche in console e timeout ZIP
   separato. Incluse istruzioni Git e documentazione; schema 1 e conservazione
-  dati invariati. Pubblicazione richiesta su GitHub tramite tag `v2.0.2` e
-  workflow Windows, dopo test e verifica del pacchetto senza database.
+  dati invariati. Pubblicata su GitHub dal commit `c304b90`, tag `v2.0.2`,
+  dopo test e build Windows: workflow `39427610950` concluso con successo.
   Collaudo locale: **195 test verificati**, compreso update Windows isolato e
   recupero; HTTPS nativo provato su manifest e ZIP pubblici con SHA-256 valido.
+  Release verificata dal client updater: ZIP e manifest pubblici, 39 file runtime,
+  CRC e digest validi, assenza di database. URL:
+  https://github.com/AmboniRider/strumentiLysa/releases/tag/v2.0.2
 - **2026-10-20 — Istruzioni Git come alternativa all'updater**: aggiunte al
   pannello di errore e a README, UPDATES, manuale e guida trasferimento.
   Distinte copie Git e postazioni senza `.git`; database/WAL/SHM e cartelle
@@ -172,10 +175,9 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
   applicata anche allo ZIP. **50 test esistenti superati**, due prove isolate
   xfail strict dimostrano i difetti. TLS predefinito Python/OpenSSL carica CA e
   ROOT Windows ma non usa il validatore nativo CryptoAPI. Da collaudare sul
-  target un contesto nativo esplicito (es. Truststore), conservando verifica
-  certificati e hostname. TODO: implementare gestione TLS Windows, messaggi
-  distinti e timeout pacchetto separato. In questa revisione nessun sorgente
-  applicativo, dipendenza, versione o Release modificato.
+  target la specifica catena TLS. Gestione nativa Windows, messaggi distinti e
+  timeout separato sono stati poi implementati e pubblicati nella 2.0.2.
+  La revisione iniziale non aveva modificato codice o dipendenze.
 - **2026-10-20 — Diagnosi verifica aggiornamenti su seconda postazione**:
   segnalato errore sulla 2.0.0 installata, mentre il controllo locale funziona.
   `check_release()` consulta l'API pubblica e scarica il manifest soltanto se
