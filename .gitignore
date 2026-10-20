@@ -45,6 +45,7 @@ Desktop.ini
 strumenti_transfer_*.zip
 .transfer-*/
 .updates/
+.ci-python/
 .app.lock
 .update.lock
 *.update

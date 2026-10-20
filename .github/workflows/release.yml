@@ -18,7 +18,7 @@ jobs:
     runs-on: windows-latest
     env:
       RELEASE_TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
-      UV_PYTHON_INSTALL_DIR: ${{ runner.temp }}/strumenti-python
+      UV_PYTHON_INSTALL_DIR: ${{ github.workspace }}/.ci-python
     permissions:
       contents: write
     steps:
