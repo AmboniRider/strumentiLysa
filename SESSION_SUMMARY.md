@@ -11,8 +11,7 @@
   database, cache, pacchetti e cartelle operative restano esclusi da Git.
 ### Issues and Solutions
 - Note di rilascio e istruzioni aggiornate al nuovo formato TXT con descrizioni.
-- Pubblicazione delegata al workflow esistente, attivato dal tag dopo i test;
-  risultati locali e remoti da registrare al completamento.
+- Pubblicazione tramite workflow esistente, attivato dal tag dopo i test.
 - Collaudo 2.1.0: **263 passed in 113.55s**, incluso il test Windows reale
   con `STRUMENTI_UPDATE_E2E=1`; nessun test saltato. `uv lock --offline` cambia
   solo la versione del progetto; `uv sync --locked --offline` riallinea il
@@ -20,6 +19,18 @@
 - Verificato ZIP con 40 file runtime, CRC e SHA-256 validi, scheda LCMS inclusa
   e nessun database/dato operativo. Distinto nelle istruzioni il TXT manuale
   a quattro campi dal TXT storico del runner, con recupero completo da SQLite.
+- Commit release `2f6553548cec19e9590688f31caa77e117c05119`, pubblicato con
+  main e tag annotato v2.1.0 tramite push atomico, senza riscrivere la storia.
+- Workflow Windows `40500168089`, job `122175575892`: **success**;
+  **263 passed in 72.41s** con Python 3.12.13 e collaudo Windows attivo.
+- Release stabile pubblica: https://github.com/AmboniRider/strumentiLysa/releases/tag/v2.1.0
+  Allegati: `strumenti-update-2.1.0.zip` (289780 byte), `update-manifest.json`.
+- Verifica dal client updater reale simulando versione precedente 2.0.2:
+  rilevata 2.1.0, download e validazione completi, 40 file, CRC valido e nessun
+  database nello ZIP. SHA-256 pubblicato:
+  `c42dacaea63b2626b7367a9934cc84b8e3dd47f03fd6b4aa992682b9479ededa`.
+- Registrazione finale degli esiti in questo file e PROJECT_CONTEXT.md,
+  sincronizzata su main con commit documentale successivo al tag immutato.
 
 ## Stato inviato senza blocco dei non mappati — 2026-10-27
 ### Decisions and Activities

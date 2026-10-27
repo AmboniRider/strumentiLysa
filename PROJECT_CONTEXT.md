@@ -171,10 +171,14 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - Nessuna perdita accidentale di dati originali (i file elaborati vengono archiviati, non cancellati).
 
 ## Current Status & Active TODO
-- **2026-10-27 — Preparazione 2.1.0**: nuova release richiesta per non mappati,
-  Agilent 6460 LCMS e correzioni minori, incluse descrizioni TXT. Versione e
-  note allineate; schema 1 e contratti LIS invariati. Pubblicazione prevista
-  tramite workflow Windows esistente, dopo collaudo locale e sincronizzazione.
+- **2026-10-27 — Release 2.1.0 pubblicata**: non mappati, Agilent 6460 LCMS e
+  correzioni minori, incluse descrizioni TXT. Versione e lockfile allineati;
+  schema 1 e contratti LIS invariati. Commit release `2f65535`, tag `v2.1.0`;
+  workflow Windows `40500168089` concluso con successo: 263 test passati sia
+  localmente sia in CI, incluso il collaudo Windows installazione/recupero.
+  Release verificata tramite updater: ZIP e manifest pubblici, 40 file runtime,
+  CRC e SHA-256 validi, nessun database. URL:
+  https://github.com/AmboniRider/strumentiLysa/releases/tag/v2.1.0
 - **2026-10-27 — Stato completato senza blocco dei non mappati**: ricalcolo
   export/merge, conteggi elenco/dettaglio e preselezione coerenti con lo snapshot
   di mappatura. Al prossimo avvio, riallineamento dei campioni già completati;
