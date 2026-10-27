@@ -31,6 +31,15 @@ class ParsedResult:
     # Snapshot della transcodifica: una modifica alle regole non cambia lo storico.
     lis_substance_code: Optional[str] = None
 
+    @property
+    def has_lis_mapping(self) -> bool:
+        """Indica se lo snapshot ha una transcodifica utilizzabile per il LIS.
+
+        La completezza degli esami con sostanze resta responsabilità
+        dell'esportatore; qui si escludono soltanto i risultati non mappati.
+        """
+        return self.is_mapped and bool((self.lis_exam_code or "").strip())
+
 
 @dataclass
 class ParsedSample:
@@ -70,7 +79,7 @@ class SampleRecord:
     exported_at: Optional[str] = None
     export_filename: Optional[str] = None
     results_count: int = 0
-    pending_results_count: int = 0
+    pending_results_count: int = 0  # Soli risultati mappati non ancora inviati.
     results: list[ParsedResult] = field(default_factory=list)
 
 

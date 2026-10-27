@@ -40,6 +40,7 @@ RUNTIME_FILES = (
     "driver_implementati/README.md", "driver_implementati/dionex_ic.md",
     "driver_implementati/mettler_toledo.md", "driver_implementati/spettrofotometro_uv_vis.md",
     "driver_implementati/agilent_5977c.md",
+    "driver_implementati/agilent_6460_lcms.md",
 )
 PATH_KEYS = ("path_input", "path_archive", "path_error", "path_export")
 ProgressCallback = Callable[[int, str], None]

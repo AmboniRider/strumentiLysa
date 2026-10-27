@@ -10,6 +10,7 @@ Ciascuna guida è redatta per essere facilmente comprensibile sia dagli operator
 
 | Strumento | Nome nel Sistema | Formato File | Separatore | Modalità Campione | Unità di Misura nel Risultato | Normalizzazione Eseguita | Guida Dettagliata |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Agilent 6460 LCMS** | `Agilent 6460 LCMS` | CSV, nome libero | Virgola (`,`) | Multi-campione, una riga per composto | Ignorate | SampleName/Compound/FinalConcentration, prima coppia valida, extra ignorati, non numerici a 0 | [agilent_6460_lcms.md](agilent_6460_lcms.md) |
 | **Agilent 5977C** | `Agilent 5977C` | CSV, nome libero | Virgola (`,`) | Multi-campione, controlli ignorati | Non presenti | Prima occorrenza valida, suffisso Results rimosso, non numerici a 0, virgola decimale | [agilent_5977c.md](agilent_5977c.md) |
 | **Cromatografo Ionico Dionex** | `Cromatografo Ionico (Dionex / IC)` | `.txt` | Tabulazione (`\t`) | Singolo Campione | Non presenti (valore o `n.a.`) | `n.a.` -> `0`, virgola decimale, rimozione byte nulli NUL | [dionex_ic.md](file:///d:/pyprg/strumenti/driver_implementati/dionex_ic.md) |
 | **Titolatore / Analizzatore Mettler Toledo** | `Mettler Toledo` | `ListReport.csv` | Punto e virgola (`;`) | Multi-Campione (N campioni) | Presenti (es. `uS`) | Rimozione unità di misura (es. `293,370 uS` -> `293,370`), virgola decimale, raggruppamento per ID | [mettler_toledo.md](file:///d:/pyprg/strumenti/driver_implementati/mettler_toledo.md) |

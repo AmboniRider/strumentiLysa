@@ -67,7 +67,8 @@ class LISExporter:
 
         La completezza dipende dal catalogo attivo corrente, mentre i codici
         delle righe restano quelli salvati all'importazione. Gli standard non
-        partecipano al controllo delle sostanze e mantengono il loro flusso.
+        partecipano al controllo delle sostanze. I parametri non mappati restano
+        nel database, ma non possono produrre righe LIS o risultare inviati.
         """
         catalog: dict[str, set[str]] = {}
         for rule in self.db.get_transcoding_rules_map().values():
@@ -80,8 +81,15 @@ class LISExporter:
             # I risultati forniti dal chiamante costituiscono la selezione.
             # Nessun ripiego su tutti gli esami del DB se la lista manca o è vuota.
             results = sample.results or []
+            mapped_results = [r for r in results if r.has_lis_mapping]
+            unmapped = [r.param_name for r in results if not r.has_lis_mapping]
+            if unmapped:
+                warnings.append(
+                    f"Campione {sample.sample_code}: parametri senza transcodifica LIS: "
+                    + ", ".join(sorted(set(unmapped)))
+                )
             groups: dict[str, list[ParsedResult]] = {}
-            for result in results:
+            for result in mapped_results:
                 if result.lis_substance_code:
                     groups.setdefault(result.lis_exam_code or "", []).append(result)
 
@@ -99,7 +107,8 @@ class LISExporter:
                         # Questa lettura distingue sostanze non ancora acquisite
                         # da sostanze presenti che l'operatore ha deselezionato.
                         available = self.db.get_sample_results(sample.id) if sample.id is not None else results
-                        present = {r.lis_substance_code for r in available if r.lis_exam_code == exam}
+                        present = {r.lis_substance_code for r in available
+                                   if r.is_mapped and r.lis_exam_code == exam}
                         missing = missing_selection - present
                         unselected = missing_selection & present
                         if missing:
@@ -116,7 +125,12 @@ class LISExporter:
                     invalid_exams.add(exam)
                     warnings.append(f"Campione {sample.sample_code}, esame {exam or '(senza codice LIS)'}: " + "; ".join(reasons))
 
-            accepted = [r for r in results if not r.lis_substance_code or (r.lis_exam_code or "") not in invalid_exams]
+            # Il codice salvato all'importazione è lo snapshot da esportare:
+            # il nome strumentale non è mai un ripiego valido per TIPO ESAME.
+            # Filtra prima di scrivere e marcare gli invii, anche per chiamanti
+            # diretti dell'esportatore che non passano dalla GUI.
+            accepted = [r for r in mapped_results
+                        if not r.lis_substance_code or (r.lis_exam_code or "") not in invalid_exams]
             if accepted:
                 prepared.append((sample, accepted))
         return prepared, warnings
@@ -149,7 +163,7 @@ class LISExporter:
 
         try:
             prepared, warnings = self._prepare_export(samples)
-            warning_text = "\n\nEsami saltati (nessuna loro sostanza esportata):\n" + "\n".join(warnings) if warnings else ""
+            warning_text = "\n\nEsami/parametri saltati:\n" + "\n".join(warnings) if warnings else ""
             if warnings:
                 user = SessionManager.get_user()
                 self.db.log_action(user.id if user else None, user.username if user else "sistema",
@@ -185,8 +199,8 @@ class LISExporter:
                             if len(matches) == 1 and matches[0].id is not None:
                                 exported_result_ids.append(matches[0].id)
 
-                        # Se il parametro non ha codice LIS, usa il nome parametro o segnala
-                        tipo_esame = r.lis_exam_code if r.lis_exam_code else r.param_name
+                        # _prepare_export ha già escluso ogni risultato senza codice LIS.
+                        tipo_esame = r.lis_exam_code
 
                         # Valorizza le 24 colonne
                         row = [

@@ -2,13 +2,22 @@
 
 Applicazione desktop locale per acquisire file di strumenti di laboratorio,
 gestire campioni e risultati su SQLite ed esportare CSV per il LIS.
-Supporta Dionex IC, Mettler Toledo e UV-Vis tramite driver dedicati.
+Supporta Dionex IC, Mettler Toledo, UV-Vis, Agilent 5977C e Agilent 6460 LCMS
+tramite driver dedicati.
 
 **Autore:** Amboni Paolo A.
 
 **Repository:** [AmboniRider/strumentiLysa](https://github.com/AmboniRider/strumentiLysa)
 
-## Versione 2.0 — Major release
+## Versione 2.1
+
+- **Gestione degli esami non mappati:** esclusione dall'export senza bloccare
+  il completamento dei campioni con tutti i risultati mappati inviati.
+- **Nuova strumentazione:** driver Agilent 6460 LCMS, integrato nel flusso LIS.
+- **Correzioni di bug minori:** descrizioni nel TXT transcodifiche, conteggi,
+  stato dei campioni e indicazioni dell'interfaccia.
+
+### Funzionalità già presenti nella serie 2.0
 
 - **Gestione delle sostanze:** transcodifica esame/sostanza ed esportazione degli
   esami con sostanze solo se completi e coerenti con il catalogo configurato.
@@ -21,11 +30,13 @@ Supporta Dionex IC, Mettler Toledo e UV-Vis tramite driver dedicati.
 - **Correzione di bug:** selezioni di esportazione, eliminazione utenti con
   conservazione dell'audit, primo accesso e aggiornamento del titolo finestra.
 
-La versione tecnica è **2.0.2**. Il controllo aggiornamenti usa la validazione
-dei certificati nativa Windows, distingue errori TLS/HTTP/timeout e mostra
-istruzioni Git alternative. Il download del pacchetto dispone di un budget
-separato di 5 minuti; documentazione di aggiornamento e conservazione dati rivista.
-Inclusa la correzione 2.0.1 del salvataggio percorsi, con driver e laboratori preservati.
+La versione tecnica è **2.1.0**. Aggiunge il driver **Agilent 6460 LCMS** e
+corregge la gestione degli esami non mappati: acquisiti e segnalati, vengono
+ignorati nel CSV e non impediscono il completamento del campione quando tutti
+i risultati mappati sono inviati. I campioni già completati vengono riallineati
+al prossimo avvio; quelli con soli non mappati restano da esportare.
+L'import/export TXT delle transcodifiche conserva anche le descrizioni.
+Incluse correzioni minori e le funzionalità di aggiornamento della serie 2.0.
 L'aggiornamento conserva il database e i dati:
 non occorre scaricare un database nuovo. Dettagli in [RELEASE_NOTES.md](RELEASE_NOTES.md).
 

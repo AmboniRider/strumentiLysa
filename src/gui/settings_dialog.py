@@ -181,6 +181,13 @@ class SettingsDialog(ctk.CTkToplevel):
 
     def _update_driver_info_text(self, driver_name: str) -> None:
         info_map = {
+            "Agilent 6460 LCMS": (
+                "• Formato: CSV con separatore virgola, preambolo ignorato fino a SampleID\n"
+                "• Colonne: SampleName (3), Compound (4), FinalConcentration (6)\n"
+                "• Multi-campione: codici dei laboratori abilitati; controlli ignorati\n"
+                "• Prima occorrenza per campione e parametro; colonne successive ignorate\n"
+                "• Valori non numerici a 0; virgola decimale per il LIS."
+            ),
             "Agilent 5977C": (
                 "• Formato: CSV con separatore virgola e decimali con punto\n"
                 "• Struttura: Sample ed esami Results in prima riga; seconda riga ignorata\n"
@@ -611,7 +618,9 @@ class SettingsDialog(ctk.CTkToplevel):
         if not file_path:
             return
         try:
-            with open(file_path, "r", encoding="utf-8-sig") as f:
+            # Il parser CSV gestisce i terminatori; non normalizzare quelli
+            # eventualmente racchiusi nella descrizione fra virgolette.
+            with open(file_path, "r", encoding="utf-8-sig", newline="") as f:
                 content = f.read()
             ok, msg = self.db.import_transcodings_text(content)
             if not ok:
@@ -639,8 +648,9 @@ class SettingsDialog(ctk.CTkToplevel):
             return
         try:
             rules = self.db.get_all_transcodings()
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(self.db.export_transcodings_text())
+            content = self.db.export_transcodings_text()
+            with open(file_path, "w", encoding="utf-8", newline="") as f:
+                f.write(content)
             messagebox.showinfo("Esportazione", f"Esportate {len(rules)} regole su file!", parent=self)
         except Exception as ex:
             messagebox.showerror("Errore", f"Impossibile salvare il file: {ex}", parent=self)

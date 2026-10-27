@@ -4,7 +4,7 @@
 
 *Applicazione Desktop per l'Acquisizione, Normalizzazione ed Esportazione dei Dati Strumentali di Laboratorio verso il LIS*
 
-*Aggiornato il 5 ottobre 2026 in base al comportamento dell'applicazione.*
+*Aggiornato il 27 ottobre 2026 per la versione 2.1.0.*
 
 ---
 
@@ -64,7 +64,15 @@ Il software è dotato di un'architettura modulare a driver capace di interpretar
 - **Soli controlli**: Il file viene archiviato con un messaggio informativo e zero campioni importati. Se invece tutti i campioni sono scartati per colonne errate, il file va in `errori`.
 - Dettagli e collaudo: [Scheda Agilent 5977C](driver_implementati/agilent_5977c.md).
 
-### 2.5 Percorsi di Lavoro (Cartelle)
+### 2.5 Agilent 6460 LCMS
+- **Formato file**: CSV con separatore virgola, nome libero e preambolo ignorato fino all'intestazione `SampleID`.
+- **Dati estratti**: Codice campione da `SampleName` (colonna 3), parametro da `Compound` (colonna 4), risultato da `FinalConcentration` (colonna 6). Nessuna ulteriore diluizione; colonne successive ignorate anche se più numerose dell'intestazione.
+- **Campioni**: Stesse regole sui codici e sui laboratori abilitati degli altri driver; controlli e standard non conformi ignorati. Le righe sono raggruppate per campione, conservando la prima misura utilizzabile per ciascun parametro, anche con righe non consecutive.
+- **Risultati**: Nomi Compound senza spazi esterni; valori non numerici, `ND` e non finiti convertiti a `0`; virgola decimale per il LIS. Configurare le transcodifiche con i nomi Compound; tracciato LIS invariato.
+- **Anomalie**: Righe di campioni validi con meno di sei colonne o Compound vuoto scartate con avviso. Intestazione incompatibile o CSV illeggibile bloccano l'intero file. Soli controlli archiviati con messaggio; soli campioni malformati inviati in `errori`.
+- Dettagli e collaudo: [Scheda Agilent 6460 LCMS](driver_implementati/agilent_6460_lcms.md).
+
+### 2.6 Percorsi di Lavoro (Cartelle)
 - `sequenze/` (Input): Cartella predefinita in cui gli strumenti o gli operatori depositano i file da acquisire. La scansione considera i file `.txt`, `.csv` e `.dat` direttamente nella cartella, senza cercare nelle sottocartelle.
 - `archiviati/` (Archivio): I file elaborati vengono spostati qui automaticamente. Il nome originale viene mantenuto; se esiste già un file omonimo viene aggiunto un timestamp.
 - `errori/` (Scarti): Destinazione dei file per cui il parsing fallisce o nessun campione viene elaborato con successo. Per un file multi-campione con esiti misti, il file viene archiviato se almeno un campione è elaborato con successo; gli errori degli altri campioni sono riportati nel riepilogo.
@@ -184,11 +192,11 @@ All'avvio comparirà la maschera di autenticazione:
 - Verificare che i parametri presentino lo stato di transcodifica `✅ Valido`.
 
 ### Passo 4 — Selezione ed Esportazione verso il LIS
-- Al caricamento dell'elenco vengono preselezionati i soli test pendenti di tutti i campioni visibili, anche senza aprirne il dettaglio. I campioni senza test selezionati restano deselezionati.
+- Al caricamento dell'elenco vengono preselezionati i soli test mappati pendenti di tutti i campioni visibili, anche senza aprirne il dettaglio. I campioni senza test selezionati restano deselezionati.
 - Selezionare o deselezionare i campioni desiderati (vedi capitolo successivo).
 - Per un invio parziale, aprire il dettaglio dei campioni interessati e lasciare spuntati solo gli esami desiderati. Il CSV include esclusivamente i test spuntati dei campioni selezionati; i campioni con zero test selezionati vengono esclusi.
 - Cliccare su `📤 Esporta Selezionati per LIS` in basso a destra: la generazione parte direttamente e al termine viene mostrato l'esito.
-- Il software genera il CSV nella cartella di esportazione configurata e marca come esportati i singoli parametri inclusi. Il campione passa a `🟢 Esportato` solo quando tutti i suoi parametri risultano esportati; altrimenti resta `🟠 Da Esportare`.
+- Il software genera il CSV nella cartella di esportazione configurata e marca come esportati i singoli parametri inclusi. Il campione passa a `🟢 Esportato` quando tutti i suoi parametri mappati risultano esportati, con almeno un invio effettivo; i non mappati ignorati non impediscono il completamento.
 - Il CSV deve essere acquisito dal LIS secondo la procedura del laboratorio. L'applicazione non riceve una conferma di acquisizione dal LIS.
 
 ---
@@ -227,20 +235,20 @@ In laboratorio accade frequentemente che uno strumento ri-analizzi un campione p
 Invece di bloccare l'acquisizione o sovrascrivere distruttivamente i dati:
 1. **Nessun Blocco Interattivo**: L'acquisizione procede senza interruzioni e senza fastidiosi popup bloccanti.
 2. **Unione Intelligente dei Test**:
-   - **Nuovi Parametri**: Vengono aggiunti al campione esistente con stato `🟠 Da Inviare`.
+   - **Nuovi Parametri**: Se mappati vengono aggiunti con stato `🟠 Da Inviare`; se non mappati restano conservati come `⚪ Ignorato` e non riaprono un campione già completato.
    - **Parametri Esistenti non ancora Esportati**: Il valore analitico viene aggiornato all'ultima misura rilevata dallo strumento.
    - **Parametri Già Esportati al LIS**: Il valore viene aggiornato alla nuova misura, mentre il timestamp dell'ultima esportazione e lo stato `🟢 Inviato` vengono conservati. La modifica del valore non riapre automaticamente il test per una nuova esportazione.
    - **Parametri assenti nel nuovo file**: Rimangono nel campione con i dati e lo stato già registrati.
 3. **Selezione dei Risultati da Esportare**:
-   - Al caricamento dell'elenco, per tutti i campioni i test già contrassegnati come `🟢 Inviato` sono deselezionati (`[ ]`) e quelli pendenti sono selezionati. Aprire un dettaglio non modifica le spunte.
+   - Al caricamento dell'elenco sono selezionati solo i parametri mappati ancora pendenti; quelli già inviati e i non mappati sono deselezionati (`[ ]`). Aprire un dettaglio non modifica le spunte.
    - Controllare il dettaglio di ogni campione prima dell'esportazione: i comandi di selezione di tutti i test possono includere anche risultati già esportati.
    - *Nota*: Se l'operatore intende volontariamente inviare una rettifica di un test già inviato, può riattivare manualmente la spunta `[✓]`.
 4. **Ripristino dello Stato del Campione**:
-   - Se un campione era già `🟢 Esportato` ma riceve nuovi test da uno strumento, il suo stato torna automaticamente a `🟠 DA_ESPORTARE`.
+   - Se un campione era già `🟢 Esportato` ma riceve nuovi test mappati da uno strumento, il suo stato torna automaticamente a `🟠 DA_ESPORTARE`. Aggiungere solo non mappati non lo riapre. Configurare un parametro prima ignorato e reimportarlo lo rende invece nuovamente pendente.
    - La colonna `N. Parametri` mostra il conteggio dei parametri selezionati sul totale (`X/Y`); nel dettaglio si distinguono i test `Da Inviare` da quelli `Inviato`.
    - Il campione riappare immediatamente nella visualizzazione predefinita pronto per essere esportato!
 5. **Completamento del Campione**:
-   - Quando **tutti** i parametri del campione risultano inclusi in un'esportazione CSV, il campione passa a `🟢 Esportato`. Può tornare `Da Esportare` se vengono importati nuovi parametri.
+   - Quando **tutti i parametri mappati** risultano inclusi in un'esportazione CSV, il campione passa a `🟢 Esportato`, anche se conserva non mappati ignorati. Serve almeno un risultato effettivamente inviato: un campione con soli non mappati resta `Da Esportare`.
 
 **Esempio**: un parametro Cloruri è stato esportato con valore `12,3`. Un nuovo file riporta Cloruri `12,8` e aggiunge un test pH. Dopo il merge, Cloruri mostra `12,8` ma resta `Inviato` con il timestamp precedente; il pH è `Da Inviare`. Per esportare anche la rettifica di Cloruri, l'operatore deve selezionarlo nel dettaglio. Lo stato `Inviato` non garantisce che il valore attualmente visualizzato sia quello contenuto nel CSV precedente.
 
@@ -251,10 +259,11 @@ Invece di bloccare l'acquisizione o sovrascrivere distruttivamente i dati:
 | Indicatore | Posizione | Significato |
 |---|---|---|
 | `[✓]` / `[ ]` | Master / Detail | **Selezionato per l'Invio**: Il campione o il parametro verrà incluso nel file CSV generato per il LIS. |
-| `🟠 Da Esportare` | Tabella Campioni | Il campione contiene almeno un parametro analitico non ancora esportato in un CSV. |
-| `🟢 Esportato` | Tabella Campioni | Tutti i parametri associati al campione sono stati inclusi in un'esportazione CSV; non indica una conferma di ricezione dal LIS. |
+| `🟠 Da Esportare` | Tabella Campioni | Restano parametri mappati da inviare, oppure non esiste ancora alcun invio effettivo (anche nel caso di soli non mappati). |
+| `🟢 Esportato` | Tabella Campioni | Tutti i parametri mappati sono inclusi in un'esportazione CSV, con almeno un invio effettivo. I non mappati non bloccano il completamento; non indica conferma di ricezione dal LIS. |
 | `🟠 Da Inviare` | Tabella Parametri | Il singolo test analitico è nuovo o non ancora esportato nel tracciato LIS. |
 | `🟢 Inviato` | Tabella Parametri | Il test è stato incluso in un'esportazione CSV. Dopo un merge il valore può essere stato aggiornato senza una nuova esportazione. |
+| `⚪ Ignorato` | Tabella Parametri | Il parametro non ha una transcodifica utilizzabile: resta conservato, senza essere esportato o conteggiato tra i pendenti. |
 | `✅ Valido` | Tabella Parametri | Il parametro strumentale è mappato correttamente su un codice riconosciuto dal LIS. |
 | `⚠️ Non Mappato` | Tabella Parametri | Il parametro strumentale non è presente nella tabella transcodifiche; richiede l'intervento dell'Amministratore. |
 
@@ -286,7 +295,7 @@ L'esportazione verso il LIS genera un file con nome `ESPORTAZIONE_YYYYMMDD_HHMMS
 | 8 | `SEGNO` | Vuoto. |
 | 9 | `VALORE` | Valore formattato dal driver per gli standard; vuoto nelle righe con sostanza. |
 | 10 | `RISULTATO` | Vuoto. |
-| 11 | `TIPO ESAME` | Codice esame LIS; in assenza di transcodifica, nome del parametro. |
+| 11 | `TIPO ESAME` | Codice esame LIS configurato; i parametri senza transcodifica sono esclusi dall'export. |
 | 12 | `ESITO` | Vuoto. |
 | 13 | `UNITÀ BGSURA` | Vuoto; questa è l'intestazione attualmente generata. |
 | 14 | `DATA INIZIO` | Vuoto. |
@@ -300,6 +309,22 @@ L'esportazione verso il LIS genera un file con nome `ESPORTAZIONE_YYYYMMDD_HHMMS
 | 22 | `RILEVATO GERME` | Vuoto. |
 | 23 | `VALORE GERME` | Vuoto. |
 | 24 | `CODICE CAMPIONE` | Codice completo a 18 caratteri. |
+
+### Parametri senza transcodifica
+
+L'importazione prosegue anche se un parametro strumentale non è configurato:
+il risultato viene conservato e segnalato come **Non Mappato**. Durante l'export
+LIS viene ignorato, senza usare il nome del composto come codice esame. Gli
+altri risultati configurati continuano a essere esportati; i parametri esclusi
+sono riepilogati e registrati nell'audit, senza essere marcati come inviati.
+I non mappati non impediscono al campione di diventare `ESPORTATO` quando tutti
+i risultati mappati sono stati inviati; i loro flag individuali restano non inviati.
+Un campione con soli non mappati resta `DA_ESPORTARE`, perché non ha trasmesso nulla.
+Al prossimo avvio, i campioni già bloccati solo dai non mappati vengono
+riallineati automaticamente, conservando risultati e metadati d'invio esistenti.
+Se tutti i risultati selezionati sono privi di transcodifica, non viene creato
+alcun CSV. Dopo aver configurato i parametri, reimportare il file per aggiornare
+le associazioni salvate: le modifiche alla configurazione non riscrivono lo storico.
 
 ### Esami con più Esiti (Sostanze)
 
@@ -342,7 +367,16 @@ Gli utenti con ruolo `ADMIN` hanno accesso al pannello `⚙️ Impostazioni` con
 - **Aggiunta e Modifica**: Possibilità di aggiungere nuove regole o modificare quelle esistenti tramite doppio clic sulla riga o con il pulsante `✏️ Modifica Regola`.
 - **Codice sostanza LIS**: Facoltativo per gli standard, necessario per ogni sostanza di un esame con più esiti. Accetta lettere e cifre, conserva maiuscole/minuscole e zeri iniziali e rimuove solo gli spazi esterni. Una coppia esame/sostanza può essere usata da una sola regola attiva.
 - **Ordinamento**: Cliccando sull'intestazione di qualsiasi colonna è possibile ordinare alfabeticamente o per ID (▲/▼).
-- **Import/Export**: Il backup `transcodifica.txt` usa `Parametro:CodiceLIS` per gli standard e `Parametro:CodiceLIS:CodiceSostanza` per le sostanze. Una riga a due campi rende standard anche una regola già esistente con sostanza. Righe vuote e commenti con `#` vengono ignorati; errori e duplicati annullano l'intera importazione senza modifiche parziali.
+- **Import/Export**: Il backup `transcodifica.txt` comprende sempre quattro campi: `Parametro:CodiceLIS:CodiceSostanza:Descrizione`, anche se la descrizione è vuota. Per gli esami standard lasciare vuoto il terzo campo: `Parametro:CodiceLIS::Descrizione`. Il file esportato inserisce automaticamente le virgolette CSV quando un campo contiene due punti, virgolette o ritorni a capo; le virgolette interne sono raddoppiate.
+- **Compatibilità TXT**: Sono ancora accettate le righe `Parametro:CodiceLIS` e `Parametro:CodiceLIS:CodiceSostanza`. Se il quarto campo è assente, una descrizione esistente viene conservata; se è presente ma vuoto, viene cancellata. Una riga a due campi rende standard anche una regola già esistente con sostanza. Le regole nuove senza descrizione hanno testo vuoto. Righe vuote e commenti esterni con `#` vengono ignorati; errori, quoting non valido e duplicati annullano l'intera importazione senza modifiche parziali.
+
+Esempio TXT con descrizioni:
+
+```text
+Fluoruri:BG00594::Fluoruri nelle acque
+Methamidophos:BG00611:00500:Residuo di Methamidophos
+Parametro:STANDARD::"Descrizione con due punti: nota"
+```
 
 ### 9.2 Driver Strumento Predefinito
 - Permette di impostare quale driver utilizzare in via preferenziale tra quelli registrati (`Dionex IC`, `Mettler Toledo`, `Spettrofotometro UV-Vis`).
@@ -364,7 +398,7 @@ Gli utenti con ruolo `ADMIN` hanno accesso al pannello `⚙️ Impostazioni` con
 ## 10. Risoluzione Problemi & Domande Frequenti (FAQ)
 
 ### D: Un parametro mostra l'etichetta `⚠️ Non Mappato`. Posso esportare il campione?
-**R:** Sì. Il campo `TIPO ESAME` conterrà il nome del parametro al posto del codice esame LIS. Per usare il codice atteso dal LIS, contattare un Amministratore per aggiungere la regola nella scheda `⚙️ Impostazioni` ➔ `Transcodifiche LIS`, quindi verificare i risultati da esportare. L'aggiunta della regola non aggiorna automaticamente i risultati già importati: occorre reimportare una copia del file originale dalla cartella di input.
+**R:** Sì, per gli altri parametri configurati. Quello non mappato viene conservato e segnalato, ma escluso dal CSV e non marcato come inviato. Se tutti i parametri selezionati sono non mappati, non viene creato alcun CSV. Contattare un Amministratore per aggiungere la regola nella scheda `⚙️ Impostazioni` ➔ `Transcodifiche LIS`, quindi reimportare una copia del file originale: la nuova regola non aggiorna automaticamente i risultati già acquisiti.
 
 ### D: Perché un campione già inviato ieri è riapparso nell'elenco "Da Esportare"?
 **R:** Significa che è stato caricato un nuovo file strumentale per quel codice campione contenente nuovi parametri non presenti in precedenza (Smart Merge). Il sistema vi segnala che ci sono nuovi test pronti da trasmettere. I test vecchi saranno già contrassegnati come `🟢 Inviato` e deselezionati.

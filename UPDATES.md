@@ -2,6 +2,12 @@
 
 ## Uso sulla postazione installata
 
+La **2.1.0** aggiunge Agilent 6460 LCMS, gestione dei risultati non mappati e
+descrizioni nel TXT delle transcodifiche. Lo schema resta 1. Al primo avvio,
+i campioni con tutti i risultati mappati già inviati e solo ignoti rimanenti
+passano a Esportato; gli ignoti non vengono marcati inviati. I campioni con
+soli ignoti restano Da esportare. Il riallineamento è registrato nell'audit.
+
 All'avvio il programma controlla le Release stabili pubbliche di
 `AmboniRider/strumentiLysa`, in background. Il controllo dei metadati ha un budget
 di 10 secondi per richiesta; il download dello ZIP ha un budget totale di 5 minuti,
@@ -49,14 +55,19 @@ Se il recupero non riesce, interrompe l'aggiornamento e mantiene la versione pre
 Prima di cambiare file il processo salva sempre in `.updates/<identificativo>/`:
 
 - `database.db`: backup completo precedente;
-- `transcodifiche.txt`: canali già codificati nel formato `Parametro:Esame[:Sostanza]`;
+- `transcodifiche.txt`: canali nel formato storico `Parametro:Esame[:Sostanza]`;
 - `previous/` e `previous-env/`: programma e ambiente precedenti;
 - `result.txt`: esito e indicazioni diagnostiche.
 
 Il dialogo ricorda di esportare i canali e indica la cartella. Il recupero delle
 transcodifiche è automatico; il TXT è disponibile anche per l'importazione manuale
-da **Impostazioni → Transcodifiche LIS → Importa TXT**. Il TXT non include le
-descrizioni e gli stati di attivazione: questi sono conservati dal recupero completo.
+da **Impostazioni → Transcodifiche LIS → Importa TXT**. Il TXT automatico del
+runner mantiene il formato storico senza descrizioni; descrizioni e stati di
+attivazione sono conservati dal recupero completo del database. Dalla 2.1.0,
+l'export manuale dalla scheda Transcodifiche LIS include invece quattro campi:
+`Parametro:Esame:Sostanza:Descrizione`, con sostanza vuota per gli standard.
+Restano importabili i vecchi file a due/tre campi, preservando le descrizioni
+già configurate se il file non le specifica.
 
 Non cancellare `.updates` durante un aggiornamento. Non è prevista cancellazione
 automatica dei backup. Dopo un errore viene ripristinata l'installazione precedente.
@@ -78,7 +89,7 @@ dal vecchio valore `app_version` nel database.
 
 Le installazioni prive dell'updater richiedono un aggiornamento manuale iniziale,
 ad applicazione chiusa, con backup completo e
-copia dei soli file del pacchetto `strumenti-update-2.0.2.zip` nell'installazione.
+copia dei soli file del pacchetto `strumenti-update-2.1.0.zip` nell'installazione.
 Eseguire nuovamente `installa.bat` per allineare le dipendenze. Conservare
 `data/strumenti.db` e tutte le cartelle operative. Lo ZIP include il nuovo
 `strumenti.bat` per abilitare il recupero da Python base.

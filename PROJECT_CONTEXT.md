@@ -24,6 +24,10 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - **Licenza & Compatibilità**: Pienamente compatibile con GNU AGPLv3 (tutte le dipendenze esterne dirette e indirette adottano licenze permissive compatibili: MIT, BSD-3-Clause, BSD-2-Clause, Apache-2.0, HPND/MIT-CMU, PSF License; codice sorgente interno 100% originale privo di componenti proprietari terzi).
 
 ## Main Components
+- `Agilent6460LCMSDriver` in `driver.py`: report CSV con preambolo fino a
+  SampleID; SampleName (3), Compound (4), FinalConcentration (6). Batch raggruppato
+  per codice, prima misura per coppia campione-parametro, colonne extra ignorate.
+  Usa validazione, transcodifiche, merge e tracciato LIS esistenti.
 - `src/gui/settings_dialog.py`: configurazione amministrativa per schede;
   il salvataggio delle cartelle rilegge `AppConfig` dal database e modifica
   solo i quattro percorsi, preservando driver, laboratori e versione effettiva.
@@ -119,8 +123,16 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
   del catalogo attivo corrente devono essere selezionate una sola volta. Gli esami
   esclusi sono riepilogati e registrati nell'audit; stati e conteggi si riferiscono
   soltanto alle righe scritte. Gli standard conservano il precedente tracciato.
-- TXT transcodifiche `Parametro:CodiceLIS[:CodiceSostanza]`, validazione completa e
-  aggiornamento atomico; coppie esame/sostanza univoche fra regole attive.
+- Parametri senza transcodifica: importati e segnalati, ma esclusi dall'export
+  per tutti i driver, senza ripiego sul nome strumentale. Sono necessari
+  `is_mapped=True` e codice LIS non vuoto nello snapshot. Esclusioni nell'audit;
+  solo risultati scritti marcati inviati. Per nuove associazioni, reimportare.
+- TXT transcodifiche `Parametro:CodiceLIS[:CodiceSostanza[:Descrizione]]`, quoting
+  CSV con separatore `:` per conservare descrizioni con delimitatori, virgolette
+  o ritorni a capo. Quarto campo assente conserva il testo esistente; vuoto lo
+  cancella. I nuovi export hanno sempre quattro campi, anche con testo vuoto,
+  per ripristinare esattamente le descrizioni su un DB esistente. Validazione completa
+  e aggiornamento atomico; coppie esame/sostanza univoche fra regole attive.
 - Modulo `driver.py` rigorosamente disaccoppiato dal resto del sistema con classe base `BaseInstrumentDriver`.
 - Codice campione a 18 caratteri con parsing posizionale rigoroso: Lab (1-2), Anno (3-4), Vuoto (5-6), Accettazione (7-11), Conferimento (12-14), Campione (15-18).
 - Valori numerici esportati con virgola decimale e valori non numerici convertiti a `0`.
@@ -132,7 +144,13 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
   interseca le selezioni esistenti con gli ID ancora presenti, senza aggiungerne.
   Il passaggio GUI-esportatore filtra sempre per ID; liste vuote o assenti non
   autorizzano il caricamento di altri esami. I conteggi usano gli stessi insiemi.
-- Tracciamento dello stato dei campioni (`DA_ESPORTARE`, `ESPORTATO`, `ERRORE`): un campione rimane `DA_ESPORTARE` finché contiene almeno un test pendente, e passa a `ESPORTATO` solo quando tutti i suoi parametri sono stati trasmessi.
+- Tracciamento dello stato dei campioni (`DA_ESPORTARE`, `ESPORTATO`, `ERRORE`):
+  si contano solo i risultati mappati con codice LIS non vuoto. Completamento
+  quando non ne restano pendenti e almeno uno è inviato; soli non mappati restano
+  `DA_ESPORTARE`. Merge con nuovi ignoti non riapre l'invio; la loro mappatura
+  tramite reimportazione lo riapre. All'avvio, riallineamento transazionale e
+  idempotente dei vecchi campioni completati, con audit e stati ERRORE preservati.
+  GUI: preselezione dei soli mappati pendenti, non mappati visibili come Ignorato.
 - Visualizzazione predefinita con filtro di stato 'Da Esportare' e periodo dell'ultimo mese per mostrare prioritariamente i campioni pendenti da processare, con selettori rapidi per consultare gli esportati o l'intero storico.
 
 ## Technical Constraints
@@ -153,6 +171,32 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - Nessuna perdita accidentale di dati originali (i file elaborati vengono archiviati, non cancellati).
 
 ## Current Status & Active TODO
+- **2026-10-27 — Preparazione 2.1.0**: nuova release richiesta per non mappati,
+  Agilent 6460 LCMS e correzioni minori, incluse descrizioni TXT. Versione e
+  note allineate; schema 1 e contratti LIS invariati. Pubblicazione prevista
+  tramite workflow Windows esistente, dopo collaudo locale e sincronizzazione.
+- **2026-10-27 — Stato completato senza blocco dei non mappati**: ricalcolo
+  export/merge, conteggi elenco/dettaglio e preselezione coerenti con lo snapshot
+  di mappatura. Al prossimo avvio, riallineamento dei campioni già completati;
+  nessun flag di invio fittizio sui risultati ignorati e nessun cambio di schema.
+  Collaudo finale: **262 test superati, 1 updater Windows opt-in saltato**;
+  verificato il riallineamento storico su database temporanei.
+- **2026-10-27 — Descrizioni nel TXT transcodifiche**: import/export esteso al
+  quarto campo; file precedenti a due/tre campi compatibili e descrizioni già
+  presenti preservate se non indicate. Parser e handler file mantengono quoting
+  e ritorni a capo. Nessuna migrazione o modifica alle transcodifiche operative.
+  Collaudo finale: **252 test superati, 1 updater Windows opt-in saltato**.
+- **2026-10-27 — Esclusione non mappati dall'export**: importazione conservativa
+  invariata, CSV limitato ai risultati con snapshot mappato e codice LIS non
+  vuoto. Proseguono gli altri esami validi; esclusi non marcati inviati e
+  riepilogati nell'audit. Completezza sostanze preservata. Suite finale:
+  **228 test superati, 1 updater Windows opt-in saltato**.
+- **2026-10-27 — Agilent 6460 LCMS**: aggiunto driver con riconoscimento dal
+  contenuto, selezione nelle impostazioni e scheda inclusa nei pacchetti.
+  Esempio atteso: 2 campioni, 41 parametri ciascuno, 4 ND a zero. Nessuna
+  dipendenza o migrazione aggiuntiva; versione e pubblicazione escluse.
+  Collaudo completato: 221 test superati e 1 updater Windows opt-in saltato;
+  verificati parsing, import/export LIS, merge e inclusione nei pacchetti.
 - **2026-10-20 — Patch release 2.0.2 pubblicata**: versione e lockfile
   allineati; nuova dipendenza runtime Windows `truststore` 0.10.5 (MIT).
   Implementati TLS nativo, errori espliciti anche in console e timeout ZIP
@@ -299,7 +343,7 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
     - Metodo di upsert intelligente in `src/database.py`: inserisce nuovi parametri senza cancellare i precedenti e aggiorna i valori preservando lo stato `is_exported` per i test già inviati (nessun re-invio automatico non autorizzato).
     - Gestione import batch fluida in `src/importer_service.py`: integrazione automatica dei campioni senza popup continui e riepilogo finale dettagliato con conteggio dei campioni arricchiti.
     - Interfaccia grafica aggiornata in `src/gui/master_detail.py`: nuova colonna "Stato LIS" (`🟢 Inviato` / `🟠 Da Inviare`) nella tabella di dettaglio parametri, pre-spunta intelligente `[✓]` attiva solo sui parametri pendenti e mantenimento del campione nello stato `DA_ESPORTARE` finché restano parametri da inviare.
-    - Metodo `mark_results_as_exported` in `src/database.py` ed esportazione selettiva in `src/exporter.py` per aggiornare singolarmente i parametri inviati e promuovere il campione a `ESPORTATO` solo quando tutti i test sono completati.
+    - Metodo `mark_results_as_exported` in `src/database.py` ed esportazione selettiva in `src/exporter.py` per aggiornare singolarmente i parametri inviati e promuovere il campione a `ESPORTATO` quando tutti i test mappati sono completati, con almeno un invio effettivo.
   - **Documentazione Tecnico-Operativa dei Driver Implementati (`driver_implementati/`)**:
     - Creato indice generale [driver_implementati/README.md](file:///d:/pyprg/strumenti/driver_implementati/README.md) con tabella di confronto, ciclo di vita e impostazione driver preferito.
     - Creata scheda approfondita per Cromatografo Ionico Dionex [dionex_ic.md](file:///d:/pyprg/strumenti/driver_implementati/dionex_ic.md) (formato `.txt` a tabulazioni, mono-campione, gestione buffer fisso e byte nulli NUL).

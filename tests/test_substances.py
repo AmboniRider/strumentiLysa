@@ -142,7 +142,7 @@ def test_txt_roundtrip_clear_substance_and_swap_targets(db: Database, tmp_path: 
     """Il TXT conserva i codici, permette scambi atomici e rende standard le righe a due campi."""
     catalog(db)
     exported = db.export_transcodings_text()
-    assert "Uno:BG00611:00500\n" in exported and "Due:BG00611:a002\n" in exported
+    assert "Uno:BG00611:00500:\n" in exported and "Due:BG00611:a002:\n" in exported
     other = Database(tmp_path / "roundtrip.db")
     assert other.import_transcodings_text(exported)[0]
     assert other.export_transcodings_text() == exported
@@ -251,6 +251,21 @@ def test_skip_whole_exam_but_export_standard(db: Database, tmp_path: Path, condi
     with db.get_connection() as conn:
         audit = conn.execute("SELECT details FROM audit_logs WHERE action='EXPORT_LIS_SKIPPED'").fetchone()
         assert reason in audit[0]
+
+
+def test_unmapped_substance_does_not_complete_group(db: Database, tmp_path: Path):
+    """Un risultato non mappato non può rendere esportabile metà di un gruppo."""
+    catalog(db)
+    unmapped = result("Uno", "00500")
+    unmapped.is_mapped = False
+    sample = save_sample(db, [result("Standard", exam="STD"), unmapped, result("Due", "a002")])
+    ok, message, path, count = LISExporter(db).export_samples([sample], tmp_path / "export")
+    assert ok and count == 1 and "senza transcodifica LIS" in message
+    assert "sostanze mancanti: 00500" in message
+    assert [row["TIPO ESAME"] for row in read_export(path)] == ["STD"]
+    assert [r.is_exported for r in db.get_sample_results(sample.id)] == [True, False, False]
+    assert db.get_sample_with_results(sample.id).status == "DA_ESPORTARE"
+    assert db.get_sample_with_results(sample.id).pending_results_count == 1
 
 
 def test_no_valid_rows_creates_no_file_and_keeps_status(db: Database, tmp_path: Path):

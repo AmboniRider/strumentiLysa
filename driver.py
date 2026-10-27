@@ -557,11 +557,144 @@ class Agilent5977CDriver(BaseInstrumentDriver):
         return samples[0]
 
 
+class Agilent6460LCMSDriver(BaseInstrumentDriver):
+    """Legge i report LCMS con una riga per coppia campione-composto.
+
+    Il preambolo non fa parte della tabella CSV. Le colonne successive alla
+    sesta sono intenzionalmente ignorate: alcuni report MassHunter hanno più
+    celle dati delle etichette dichiarate, senza alterare i campi acquisiti.
+    """
+
+    name: str = "Agilent 6460 LCMS"
+
+    @staticmethod
+    def _report_content(content: str) -> tuple[str, int]:
+        """Restituisce la tabella e il numero di righe di preambolo ignorate."""
+        lines = content.splitlines(keepends=True)
+        for index, line in enumerate(lines):
+            # Ignora anche eventuali virgolette irregolari nei metadati: il
+            # parsing CSV rigoroso deve iniziare solo dalla vera intestazione.
+            if re.match(r'^\s*"?SampleID"?\s*(?:,|$)', line, re.IGNORECASE):
+                return "".join(lines[index:]), index
+        raise ValueError("Intestazione Agilent 6460 LCMS SampleID mancante")
+
+    @staticmethod
+    def _matches_header(header: List[str]) -> bool:
+        """Verifica i nomi nelle posizioni concordate, senza rimappare colonne."""
+        expected = {0: "sampleid", 2: "samplename", 3: "compound", 5: "finalconcentration"}
+        return len(header) >= 6 and all(
+            header[index].strip().casefold() == name for index, name in expected.items()
+        )
+
+    def can_handle(self, file_path: Path | str) -> bool:
+        """Riconosce il report dal contenuto, indipendentemente dal nome file."""
+        try:
+            content, _ = self._report_content(self._read_text_file(Path(file_path)))
+            reader = csv.reader(io.StringIO(content, newline=""), strict=True)
+            return self._matches_header(next(reader, []))
+        except (OSError, ValueError, csv.Error):
+            return False
+
+    def parse_batch(
+        self,
+        file_path: Path | str,
+        transcode_map: Optional[Dict[str, str]] = None,
+        allowed_labs: Optional[Set[str]] = None,
+    ) -> ParsedBatch:
+        """Estrae il batch completo; segnala gli scarti prima del salvataggio.
+
+        La prima riga utilizzabile di ciascuna coppia campione-parametro prevale.
+        Un errore CSV globale solleva ValueError anche dopo righe valide, evitando
+        che il servizio importi soltanto una parte di un file illeggibile.
+        """
+        path = Path(file_path)
+        content, offset = self._report_content(self._read_text_file(path))
+        reader = csv.reader(io.StringIO(content, newline=""), strict=True)
+        batch = ParsedBatch()
+        samples: Dict[str, ParsedSample] = {}
+        seen: Set[tuple[str, str]] = set()
+        trans_map = transcode_map or {}
+        try:
+            if not self._matches_header(next(reader, [])):
+                raise ValueError(
+                    "Intestazione Agilent 6460 LCMS non valida: attesi SampleID, "
+                    "SampleName (3), Compound (4), FinalConcentration (6)"
+                )
+            while True:
+                line_number = offset + reader.line_num + 1
+                row = next(reader, None)
+                if row is None:
+                    break
+                # Senza SampleName non si può attribuire la riga a un campione;
+                # controlli e altri identificativi ignorati non sono anomalie.
+                if len(row) < 3:
+                    continue
+                valid, code, _ = validate_sample_code(row[2], allowed_labs)
+                if not valid or code is None:
+                    continue
+                if len(row) < 6:
+                    batch.warnings.append(
+                        f"Riga {line_number} scartata: {len(row)} colonne invece di almeno 6"
+                    )
+                    continue
+                name = row[3].strip()
+                if not name:
+                    batch.warnings.append(f"Riga {line_number} scartata: Compound vuoto")
+                    continue
+                key = (code.raw_code, name)
+                if key in seen:
+                    continue
+                raw = row[5].strip()
+                numeric, formatted = self._normalize_value(raw)
+                if not math.isfinite(numeric):
+                    numeric, formatted = 0.0, "0"
+                lis_code = trans_map.get(name)
+                if code.raw_code not in samples:
+                    samples[code.raw_code] = ParsedSample(
+                        sample_code=code.raw_code, source_filename=path.name,
+                        instrument_name=self.name,
+                    )
+                samples[code.raw_code].results.append(ParsedResult(
+                    param_name=name, raw_value=raw, numeric_value=numeric,
+                    formatted_value=formatted, lis_exam_code=lis_code,
+                    is_mapped=bool(lis_code),
+                ))
+                # Uno scarto non occupa mai la prima occorrenza utilizzabile.
+                seen.add(key)
+        except csv.Error as exc:
+            raise ValueError(
+                f"CSV Agilent 6460 LCMS illeggibile alla riga {offset + reader.line_num}: {exc}"
+            ) from exc
+        batch.samples = list(samples.values())
+        batch.archive_if_empty = not batch.warnings
+        return batch
+
+    def parse_samples(
+        self,
+        file_path: Path | str,
+        transcode_map: Optional[Dict[str, str]] = None,
+    ) -> List[ParsedSample]:
+        """Restituisce i campioni usando i prefissi laboratorio predefiniti."""
+        return self.parse_batch(file_path, transcode_map).samples
+
+    def parse_file(
+        self,
+        file_path: Path | str,
+        transcode_map: Optional[Dict[str, str]] = None,
+    ) -> ParsedSample:
+        """Restituisce il primo campione o segnala l'assenza di dati validi."""
+        samples = self.parse_samples(file_path, transcode_map)
+        if not samples:
+            raise ValueError("Nessun campione valido nel file Agilent 6460 LCMS")
+        return samples[0]
+
+
 # Registro dei driver disponibili
 AVAILABLE_DRIVERS: List[Type[BaseInstrumentDriver]] = [
     DionexICDriver,
     MettlerToledoDriver,
     Agilent5977CDriver,
+    Agilent6460LCMSDriver,
     SpectrophotometerDriver,
 ]
 

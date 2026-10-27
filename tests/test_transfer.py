@@ -65,6 +65,7 @@ def test_zip_contents_and_sanitized_database(transfer_source: Path, tmp_path: Pa
     with ZipFile(result) as archive:
         assert archive.testzip() is None
         assert b"Agilent 5977C" in archive.read("strumenti/driver_implementati/agilent_5977c.md")
+        assert b"Agilent 6460 LCMS" in archive.read("strumenti/driver_implementati/agilent_6460_lcms.md")
         assert set(archive.namelist()) == {"strumenti/" + p for p in trasfer.RUNTIME_FILES} | {
             "strumenti/data/strumenti.db", "strumenti/installa.bat", "strumenti/strumenti.bat"}
         db_bytes = archive.read("strumenti/data/strumenti.db")

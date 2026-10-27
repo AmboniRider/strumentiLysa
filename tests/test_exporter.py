@@ -1,10 +1,11 @@
 """Test unitari per il modulo exporter.py."""
 
 from pathlib import Path
+import pytest
 from driver import parse_instrument_file
 from src.database import Database
 from src.exporter import LISExporter, LIS_CSV_HEADER
-from src.models import SampleRecord
+from src.models import ParsedResult, SampleRecord
 from src.validator import validate_sample_code
 
 
@@ -78,3 +79,14 @@ def test_exporter_generates_csv(tmp_path: Path):
     cols_row3 = lines[3].split(";")
     assert cols_row3[8] == "0,7733"
     assert cols_row3[10] == "BG00590"
+
+
+@pytest.mark.parametrize("mapped,code", [(False, "IGNORATO"), (True, None), (True, "  ")])
+def test_export_requires_mapping_and_nonempty_lis_code(tmp_path: Path, mapped: bool, code: str | None):
+    """Anche le chiamate dirette con dati incoerenti non esportano nomi grezzi."""
+    db = Database(tmp_path / "test.db")
+    sample = SampleRecord(None, "BG2600104420010001", "BG", 2026, "10442", 1, 1, "test.csv")
+    sample.results = [ParsedResult("Parametro ignoto", "2", 2.0, "2", lis_exam_code=code, is_mapped=mapped)]
+    ok, message, output, count = LISExporter(db).export_samples([sample], tmp_path / "export")
+    assert not ok and count == 0 and "Parametro ignoto" in message
+    assert not output.exists()

@@ -604,7 +604,7 @@ class MasterDetailView(ctk.CTkFrame):
                 self.selected_tests_by_sample[sample.id].intersection_update(available_ids)
             else:
                 self.selected_tests_by_sample[sample.id] = {
-                    r.id for r in results if r.id is not None and not r.is_exported
+                    r.id for r in results if r.id is not None and r.has_lis_mapping and not r.is_exported
                 }
             if not self.selected_tests_by_sample[sample.id]:
                 self.selected_sample_ids.discard(sample.id)
@@ -698,7 +698,8 @@ class MasterDetailView(ctk.CTkFrame):
 
         for r in results:
             is_sel = " [✓] " if r.id in selected_test_ids else " [  ] "
-            status_lis = "🟢 Inviato" if r.is_exported else "🟠 Da Inviare"
+            status_lis = ("🟢 Inviato" if r.is_exported else
+                          "🟠 Da Inviare" if r.has_lis_mapping else "⚪ Ignorato")
             mapping_status = "✅ Valido" if r.is_mapped else "⚠️ Non Mappato"
             self.tree_detail.insert(
                 "",
@@ -745,7 +746,9 @@ class MasterDetailView(ctk.CTkFrame):
 
         if sample.id not in self.selected_tests_by_sample:
             results = self.db.get_sample_results(sample.id)
-            self.selected_tests_by_sample[sample.id] = {r.id for r in results if r.id is not None and not r.is_exported}
+            self.selected_tests_by_sample[sample.id] = {
+                r.id for r in results if r.id is not None and r.has_lis_mapping and not r.is_exported
+            }
 
         test_set = self.selected_tests_by_sample[sample.id]
         if test_id in test_set:

@@ -1,52 +1,59 @@
-# Strumenti LYSA 2.0.2 — Correzioni updater e documentazione
+# Strumenti LYSA 2.1 — Gestione esami non mappati e nuova strumentazione
 
+**Versione tecnica:** 2.1.0
 **Autore:** Amboni Paolo A.
 
-## Correzioni
+## Gestione degli esami non mappati
 
-- Su Windows il controllo e il download aggiornamenti usano la validazione
-  nativa dei certificati tramite `truststore`/CryptoAPI, con controlli su
-  certificato e hostname attivi. La catena di fiducia può recuperare gli
-  intermedi mancanti tramite il sistema operativo.
-- Il pannello distingue errori di certificato HTTPS, errori HTTP e timeout;
-  il controllo fallito viene segnalato anche in console.
-- Separati i tempi del controllo e del download: 10 secondi per richiesta
-  dei metadati e fino a 5 minuti per lo ZIP, mantenendo un timeout di inattività
-  di 10 secondi sul socket e i controlli di dimensione e SHA-256.
-- In caso di errore di verifica, il pannello mostra istruzioni Git copiabili
-  adatte sia alle copie con repository sia alle installazioni da pacchetto.
-- Conservata la correzione 2.0.1 del salvataggio percorsi nelle impostazioni.
+- L'importazione prosegue conservando e segnalando i parametri senza
+  transcodifica. Questi vengono ignorati nell'export LIS, senza usare il nome
+  strumentale come codice esame e senza marcarli come inviati.
+- Il campione passa a **Esportato** quando tutti i parametri mappati sono
+  trasmessi, anche se contiene non mappati ignorati. Serve almeno un risultato
+  realmente inviato: i campioni con soli non mappati restano **Da esportare**.
+- Al prossimo avvio vengono riallineati automaticamente anche i campioni
+  già completati. Risultati e metadati esistenti sono conservati; gli stati
+  di errore non vengono modificati e il riallineamento è registrato nell'audit.
+- Conteggi e preselezione considerano i soli parametri mappati pendenti;
+  gli altri sono visibili nel dettaglio come **Ignorato**. Una nuova mappatura
+  applicata mediante reimportazione rende nuovamente pendente il risultato.
 
-## Documentazione
+## Nuova strumentazione
 
-- README, guida aggiornamenti, manuale e guida trasferimento aggiornati con
-  la procedura Git alternativa, i controlli sul database non tracciato e la
-  conservazione dei dati locali.
-- Per le postazioni senza `.git`, documentati clone separato e generazione
-  del solo ZIP aggiornamento con il launcher dedicato all'installazione.
-- Chiariti backup preliminare, eventuali migrazioni e differenze tra ZIP
-  aggiornamento e ZIP trasferimento.
+- Aggiunto il driver **Agilent 6460 LCMS**, con riconoscimento automatico
+  del CSV e selezione nelle impostazioni.
+- Preambolo ignorato fino a `SampleID`; acquisizione da `SampleName` (3),
+  `Compound` (4) e `FinalConcentration` (6), senza ulteriori diluizioni.
+- Raggruppamento per campione, prima misura utilizzabile per parametro,
+  controlli e codici non validi ignorati; colonne successive alla sesta ignorate.
+- Normalizzazione dei risultati e transcodifiche integrate nel flusso esistente.
 
-## Database e compatibilità
+## Correzioni di bug minori
 
-Nessun database nuovo richiesto. Lo schema resta **1** e i dati esistenti
-vengono conservati. Per le installazioni storiche con schema 0 resta disponibile
-la migrazione senza perdita allo schema 1.
+- Importazione ed esportazione TXT delle transcodifiche includono ora la
+  **descrizione**, conservando accenti, due punti, virgolette e ritorni a capo.
+  I nuovi file hanno quattro campi; i precedenti a due/tre campi restano
+  importabili senza cancellare le descrizioni esistenti.
+- Corretto il ricalcolo dello stato dopo export e merge in presenza di
+  parametri ignorati e allineate le indicazioni dell'interfaccia e del manuale.
+- Mantenuti i controlli di completezza degli esami con sostanze: un gruppo
+  incompleto o fuori catalogo viene escluso, proseguendo con gli altri esami validi.
 
-## Installazione
+## Database e installazione
+
+Lo schema resta **1**. Non è richiesto un database nuovo; utenti, impostazioni,
+transcodifiche e risultati esistenti vengono conservati. Il formato CSV LIS
+resta invariato, con separatore punto e virgola e 24 colonne.
 
 - Postazioni con updater: **Impostazioni → Aggiornamenti e backup**.
-- Versioni prive di updater: chiudere il programma, salvare database e
-  transcodifiche e sovrapporre i soli file di `strumenti-update-2.0.2.zip`;
-  eseguire `installa.bat` per riallineare le dipendenze. Conservare
-  `data/strumenti.db` e tutte le cartelle operative.
-- Copie di sviluppo con `.git`: usare il normale flusso Git.
-- Per errori HTTPS delle versioni precedenti: seguire la procedura Git in
-  `UPDATES.md`; dopo la copia dei sorgenti eseguire `installa.bat` o
-  `uv sync --locked` per installare la nuova dipendenza TLS.
+- Installazioni senza updater: chiudere il programma, conservare una copia
+  del database e delle transcodifiche e applicare i soli file di
+  `strumenti-update-2.1.0.zip`, mantenendo database e cartelle operative.
+- Copie con `.git`: sincronizzare il repository e riallineare l'ambiente con
+  `uv sync --locked`.
 
-Il pacchetto di aggiornamento non contiene database o dati di laboratorio.
+Il pacchetto aggiornamento non contiene database o dati di laboratorio.
 Non usare lo ZIP di trasferimento con database ripulito per aggiornare una
-postazione esistente.
+postazione esistente. Le funzionalità TLS e aggiornamento della 2.0.2 restano incluse.
 
-Dettagli: [UPDATES.md](https://github.com/AmboniRider/strumentiLysa/blob/v2.0.2/UPDATES.md).
+Dettagli: [UPDATES.md](https://github.com/AmboniRider/strumentiLysa/blob/v2.1.0/UPDATES.md).

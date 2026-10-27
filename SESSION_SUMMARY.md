@@ -1,5 +1,138 @@
 # SESSION SUMMARY
 
+## Release 2.1.0 e sincronizzazione GitHub — 2026-10-27
+### Decisions and Activities
+- L'utente ha richiesto versione 2.1, note su gestione esami non mappati,
+  correzioni minori e nuova strumentazione, pubblicazione e sincronizzazione.
+- Adottata versione tecnica 2.1.0/tag v2.1.0 per il workflow stabile esistente.
+- Verificati main e origin/main inizialmente allineati a ec0f320, tag 2.1
+  assenti, repository pubblico e nessun database operativo tracciato.
+- Inclusi gli interventi della sessione, i test e i CSV di esempio forniti;
+  database, cache, pacchetti e cartelle operative restano esclusi da Git.
+### Issues and Solutions
+- Note di rilascio e istruzioni aggiornate al nuovo formato TXT con descrizioni.
+- Pubblicazione delegata al workflow esistente, attivato dal tag dopo i test;
+  risultati locali e remoti da registrare al completamento.
+- Collaudo 2.1.0: **263 passed in 113.55s**, incluso il test Windows reale
+  con `STRUMENTI_UPDATE_E2E=1`; nessun test saltato. `uv lock --offline` cambia
+  solo la versione del progetto; `uv sync --locked --offline` riallinea il
+  pacchetto locale senza aggiornare le dipendenze.
+- Verificato ZIP con 40 file runtime, CRC e SHA-256 validi, scheda LCMS inclusa
+  e nessun database/dato operativo. Distinto nelle istruzioni il TXT manuale
+  a quattro campi dal TXT storico del runner, con recupero completo da SQLite.
+
+## Stato inviato senza blocco dei non mappati — 2026-10-27
+### Decisions and Activities
+- Richiesto che i non mappati ignorati nell'export non impediscano lo stato
+  inviato del campione, una volta trasmessi tutti i parametri mappati.
+- L'utente ha confermato: soli non mappati restano Da esportare; i campioni
+  storici già completati vengono riallineati automaticamente al prossimo avvio.
+- Ricalcolo di export e merge sui soli risultati mappati con codice LIS non
+  vuoto; almeno un risultato deve risultare effettivamente inviato. Conteggi
+  pendenti coerenti in elenco e dettaglio; nessuna falsa marcatura degli ignoti.
+- GUI: preselezione dei soli mappati pendenti e stato Ignorato per i non mappati.
+- Riallineamento all'avvio transazionale, idempotente e registrato nell'audit;
+  preservati risultati, metadati esistenti e stati ERRORE. Data assente recuperata
+  dagli invii reali; nomi file non ricostruibili non vengono inventati.
+### Issues and Solutions
+- I vecchi conteggi includevano qualsiasi is_exported=0, anche i parametri
+  che l'esportatore scarta. Allineati conteggio e completamento al medesimo
+  criterio di mappatura, preservando i controlli sugli esami sostanze incompleti.
+- Aggiunti test per completamento, invii parziali, merge/reimportazione,
+  soli ignoti, riallineamento storico ripetuto e flusso GUI reale.
+- Collaudo mirato: **84 passed in 31.96s**, inclusi invii parziali, sostanze,
+  CSV Agilent reale, merge, GUI e riallineamento ripetuto di database temporanei.
+- Suite completa: **262 passed, 1 skipped in 85.91s**, tramite uv offline,
+  no-cache/no-sync e `--basetemp=.pytest-sample-status-full`. Saltato solo il
+  test updater Windows opt-in. `git diff --check` senza errori di whitespace.
+- Confermati stati e conteggi in elenco/dettaglio, ignoti mai marcati inviati,
+  soli ignoti ancora Da esportare e riapertura dopo nuova mappatura/reimport.
+  Database operativo non aperto durante i collaudi: il riallineamento dei dati
+  reali avverrà al prossimo avvio dell'applicazione, come concordato.
+
+## Descrizioni nel TXT transcodifiche — 2026-10-27
+### Decisions and Activities
+- Identificata l'omissione della descrizione nell'export e il suo azzeramento
+  nell'import, nonostante il campo fosse già disponibile nel database e GUI.
+- Esteso il formato a `Parametro:CodiceLIS:CodiceSostanza:Descrizione`; terzo
+  campo vuoto per gli standard. Compatibilità con due/tre campi: descrizione
+  preesistente conservata; quarto campo esplicitamente vuoto la cancella.
+- I nuovi export includono sempre tutti e quattro i campi, anche con testo
+  vuoto, per ripristinare correttamente un backup su un database già configurato.
+- Adottato quoting CSV con separatore `:` per descrizioni con delimitatori,
+  virgolette o ritorni a capo; commenti esterni e righe vuote ignorati.
+- Handler GUI senza normalizzazione dei terminatori nei campi quotati;
+  serializzazione completata prima di aprire il file di destinazione.
+- Aggiunte regressioni su roundtrip, compatibilità, cancellazione esplicita,
+  rollback, errori in coda e veri handler GUI con selettori/popup sostituiti.
+### Issues and Solutions
+- L'import precedente passava sempre una descrizione vuota all'upsert. Ora
+  distingue il campo assente da quello vuoto nella transazione esistente.
+- I codici sostanza restano nel terzo campo per evitare ambiguità e conservano
+  gli zeri iniziali. Nessuna modifica al database operativo o allo schema.
+- Collaudo mirato iniziale: **49 passed in 23.42s**. Aggiunta successivamente
+  la regressione sul ripristino di una descrizione vuota su un DB già configurato.
+- Suite completa finale: **252 passed, 1 skipped in 79.09s**, tramite
+  `uv --offline --no-cache run --no-sync python -m pytest -q -p no:cacheprovider
+  --basetemp=.pytest-transcodings-description-full --tb=short`.
+  Saltato solo il test updater Windows opt-in; nessun file operativo modificato.
+- Verificati roundtrip standard/sostanze con zeri iniziali, descrizioni vuote,
+  accenti, due punti, virgolette, LF/CRLF/CR, commenti e BOM; preservazione dei
+  testi nei vecchi file, cancellazione esplicita, rollback e handler GUI reali.
+
+## Parametri non configurati — 2026-10-27
+### Decisions and Activities
+- Estratti i 41 nomi Compound dal CSV Agilent 6460 LCMS per la configurazione.
+- L'utente ha scelto di conservare e segnalare i non mappati nell'importazione
+  ed escluderli soltanto dall'export LIS, per tutti i driver. Confermata la
+  regola esistente per sostanze fuori catalogo: esclusione dell'intero esame,
+  proseguendo con gli altri esami validi.
+- Modificato il filtro dell'esportatore: richiesti flag mappato e codice LIS
+  non vuoto, eliminato ripiego sul nome parametro; riepilogo e audit degli
+  scarti, nessun aggiornamento invio dei risultati esclusi.
+- Aggiunte regressioni con esame standard/sostanza configurato e 40 nomi
+  ignoti, file di soli ignoti e chiamate dirette con dati incoerenti.
+### Issues and Solutions
+- La verifica su copia con un solo parametro configurato importava correttamente
+  2 campioni ma esportava 82 righe, 80 con nomi privi di codice LIS. Ora il
+  filtro impedisce tali righe senza cancellare i dati acquisiti.
+- Verifica iniziale delle regole sostanze e parsing: 6 test superati.
+- Suite completa finale: **228 passed, 1 skipped in 69.15s**, tramite uv
+  offline/no-cache/no-sync, cache pytest disabilitata e dati temporanei in
+  `.pytest-unmapped-final`. Saltato solo il test updater Windows opt-in.
+- Sul CSV reale, con un solo composto configurato come standard o sostanza:
+  acquisiti 82 risultati, segnalati 40 nomi ignoti, esportate solo le 2 misure
+  mappate. Le altre 80 rimangono conservate e non inviate; esclusioni nell'audit.
+- Verificati anche file di soli ignoti (nessun CSV), codici assenti/incoerenti
+  nelle chiamate dirette e impossibilità di completare un gruppo sostanze con
+  un risultato non mappato. Regressioni sugli altri flussi superate.
+
+## Driver Agilent 6460 LCMS — 2026-10-27
+### Decisions and Activities
+- Analizzati struttura, driver esistenti e CSV fornito; concordati colonne extra
+  ignorate e prima riga utilizzabile per coppia campione-parametro.
+- Implementato driver registrato, descrizione impostazioni, scheda tecnica,
+  indice, manuale e whitelist dei pacchetti. Nessuna modifica a schema, versione,
+  dipendenze, exporter o database operativo.
+- Aggiunto collaudo dedicato su copie e database temporanei per parsing,
+  validazione, errori, importazione, sostanze LIS, export e merge.
+### Issues and Solutions
+- Il CSV ha 19 etichette ma 21 celle per riga: si leggono solo le colonne
+  concordate (3, 4, 6), accettando almeno sei celle, senza ricalcolo diluizione.
+- Launcher isolato non avviabile per volume U: inesistente; usata esecuzione
+  autorizzata dei comandi per analisi e verifiche locali.
+- Suite completa tramite `uv --offline --no-cache run --no-sync python -m pytest
+  -q -p no:cacheprovider --basetemp=.pytest-agilent6460-full --tb=short`:
+  **221 passed, 1 skipped in 64.87s**. Saltato soltanto il collaudo Windows
+  dell'updater che richiede `STRUMENTI_UPDATE_E2E=1`, estraneo al nuovo driver.
+- Confermati 2 campioni, 82 risultati e 4 ND a zero sull'esempio; export LIS
+  con 24 colonne, snapshot sostanze, merge con invii preservati, integrità/FK
+  del database temporaneo e inclusione scheda nello ZIP. Nessun dato operativo
+  usato per scritture; file di esempio originale preservato.
+- Nel primo collaudo mirato (68 passati, 1 fallito) il test merge confrontava
+  la dataclass precedente all'export con il database già aggiornato: corretta
+  la lettura del test, nessuna correzione necessaria alla logica applicativa.
+
 ## Patch release 2.0.2 — 2026-10-20
 ### Decisions and Activities
 - Richiesto avanzamento a 2.0.2 con correzioni e documentazione, sincronizzazione

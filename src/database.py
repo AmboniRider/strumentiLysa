@@ -12,9 +12,12 @@ campioni, risultati, utenti, transcodifiche e configurazioni.
 
 from __future__ import annotations
 
+import csv
+import io
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 
@@ -77,7 +80,58 @@ class Database:
                 migration(conn)
                 schema += 1
                 conn.execute(f"PRAGMA user_version = {schema}")
+            self._reconcile_completed_samples(conn)
         self._seed_initial_data()
+
+    @staticmethod
+    def _get_export_progress(conn: sqlite3.Connection, sample_id: int) -> tuple[int, int]:
+        """Conta i soli risultati mappati pendenti e inviati nello snapshot.
+
+        Il numero di inviati impedisce di dichiarare completato un campione
+        senza alcuna trasmissione, per esempio se contiene solo non mappati.
+        """
+        row = conn.execute("""
+            SELECT COALESCE(SUM(is_exported = 0), 0) AS pending,
+                   COALESCE(SUM(is_exported = 1), 0) AS sent
+            FROM sample_results
+            WHERE sample_id = ? AND is_mapped = 1
+              AND TRIM(COALESCE(lis_exam_code, '')) <> ''
+        """, (sample_id,)).fetchone()
+        return row["pending"], row["sent"]
+
+    @staticmethod
+    def _reconcile_completed_samples(conn: sqlite3.Connection) -> None:
+        """Riallinea all'avvio i campioni bloccati solo dai risultati ignorati.
+
+        Non modifica flag di invio, file di export o stati ERRORE. Recupera
+        l'ultima data reale dai risultati se il riepilogo non l'aveva registrata;
+        un nome file assente non può essere ricostruito e viene lasciato tale.
+        """
+        changed = conn.execute("""
+            UPDATE samples SET status = 'ESPORTATO',
+                exported_at = COALESCE(exported_at, (
+                    SELECT MAX(r.exported_at) FROM sample_results r
+                    WHERE r.sample_id = samples.id AND r.is_exported = 1
+                      AND r.is_mapped = 1 AND TRIM(COALESCE(r.lis_exam_code, '')) <> ''
+                ))
+            WHERE status = 'DA_ESPORTARE'
+              AND EXISTS (
+                  SELECT 1 FROM sample_results r WHERE r.sample_id = samples.id
+                    AND r.is_exported = 1 AND r.is_mapped = 1
+                    AND TRIM(COALESCE(r.lis_exam_code, '')) <> ''
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM sample_results r WHERE r.sample_id = samples.id
+                    AND r.is_exported = 0 AND r.is_mapped = 1
+                    AND TRIM(COALESCE(r.lis_exam_code, '')) <> ''
+              )
+        """).rowcount
+        if changed:
+            conn.execute("""
+                INSERT INTO audit_logs (username, action, details)
+                VALUES ('sistema', 'SAMPLE_STATUS_RECONCILED', ?)
+            """, (f"Riallineati {changed} campioni: tutti i risultati mappati già inviati; "
+                  "non mappati esclusi dal completamento",))
 
     def _migrate_0_to_1(self, conn: sqlite3.Connection) -> None:
         """Crea o aggiorna lo schema storico nella transazione del chiamante."""
@@ -558,28 +612,43 @@ class Database:
     def import_transcodings_text(self, content: str) -> tuple[bool, str]:
         """Valida l'intero TXT e applica tutte le regole in una sola transazione.
 
-        Accetta Parametro:Esame[:Sostanza]. Errori, nomi ripetuti o destinazioni
-        concorrenti annullano l'intero import, compresi gli aggiornamenti.
+        Accetta Parametro:Esame[:Sostanza[:Descrizione]], con quoting CSV.
+        Nei vecchi file senza descrizione conserva quella già memorizzata;
+        il quarto campo vuoto la cancella esplicitamente. Errori, nomi ripetuti
+        o destinazioni concorrenti annullano l'intero import.
         """
-        parsed: list[tuple[str, str, Optional[str]]] = []
+        parsed: list[tuple[str, str, Optional[str], Optional[str]]] = []
         names: set[str] = set()
+        line_number = 0
         try:
-            for line_number, line in enumerate(content.splitlines(), 1):
-                line = line.strip()
-                if not line or line.startswith("#"):
+            stream = io.StringIO(content.lstrip("\ufeff"), newline="")
+            while (line := stream.readline()):
+                line_number += 1
+                if not line.strip() or line.lstrip().startswith("#"):
                     continue
-                parts = line.split(":")
-                if len(parts) not in (2, 3):
-                    raise ValueError(f"Riga {line_number}: usare Parametro:CodiceLIS[:CodiceSostanza]")
+                # Il lettore consuma solo questo record (eventualmente su più
+                # righe). Così i commenti esterni sono ignorati, anche con quote
+                # irregolari, ma un '#' dentro una descrizione resta testo.
+                reader = csv.reader(chain([line], stream), delimiter=":", strict=True)
                 try:
-                    values = self._clean_transcoding_values(parts[0], parts[1], parts[2] if len(parts) == 3 else None)
+                    parts = next(reader)
+                except csv.Error as ex:
+                    raise ValueError(f"Riga {line_number}: TXT illeggibile: {ex}") from ex
+                if len(parts) not in (2, 3, 4):
+                    raise ValueError(
+                        f"Riga {line_number}: usare Parametro:CodiceLIS[:CodiceSostanza[:Descrizione]]"
+                    )
+                try:
+                    values = self._clean_transcoding_values(parts[0], parts[1], parts[2] if len(parts) >= 3 else None)
                 except ValueError as ex:
                     raise ValueError(f"Riga {line_number}: {ex}") from ex
                 name = values[0].casefold()
                 if name in names:
                     raise ValueError(f"Riga {line_number}: parametro '{values[0]}' duplicato nel file")
                 names.add(name)
-                parsed.append(values)
+                description = parts[3].strip() if len(parts) == 4 else None
+                parsed.append((*values, description))
+                line_number += reader.line_num - 1
             if not parsed:
                 raise ValueError("Il file non contiene regole di transcodifica")
 
@@ -589,7 +658,7 @@ class Database:
                 final_rules = {row["instrument_param_name"].casefold():
                                (row["lis_exam_code"], row["lis_substance_code"])
                                for row in conn.execute("SELECT * FROM transcodings WHERE is_active = 1")}
-                final_rules.update({param.casefold(): (exam, substance) for param, exam, substance in parsed})
+                final_rules.update({param.casefold(): (exam, substance) for param, exam, substance, _ in parsed})
                 targets: dict[tuple[str, str], str] = {}
                 for name, (exam, substance) in final_rules.items():
                     if substance is not None:
@@ -600,22 +669,40 @@ class Database:
                 # Disattivazione temporanea nella stessa transazione: permette anche
                 # lo scambio di destinazioni fra regole senza collisioni intermedie.
                 conn.executemany("UPDATE transcodings SET is_active = 0 WHERE instrument_param_name = ?",
-                                 [(param,) for param, _, _ in parsed])
-                for param, exam, substance in parsed:
-                    self._upsert_transcoding(conn, param, exam, "", substance)
+                                 [(param,) for param, _, _, _ in parsed])
+                for param, exam, substance, description in parsed:
+                    if description is None:
+                        # Un vecchio TXT non esprime una modifica descrittiva:
+                        # evita di cancellare testo già configurato dall'operatore.
+                        existing = conn.execute(
+                            "SELECT description FROM transcodings WHERE instrument_param_name = ?", (param,)
+                        ).fetchone()
+                        description = (existing[0] or "") if existing else ""
+                    self._upsert_transcoding(conn, param, exam, description, substance)
             return True, f"Importate {len(parsed)} regole con successo"
         except (ValueError, sqlite3.IntegrityError) as ex:
             return False, f"Nessuna regola importata: {ex}"
 
     def export_transcodings_text(self) -> str:
-        """Serializza le regole nel TXT compatibile con gli esami standard."""
-        lines = []
+        """Serializza codici e descrizioni nel TXT a quattro campi.
+
+        Il quarto campo è sempre presente, anche vuoto, per ripristinare il
+        testo esatto su una regola già esistente; per gli standard il terzo è
+        vuoto. Il writer CSV protegge due punti, virgolette e ritorni a capo.
+        """
+        stream = io.StringIO(newline="")
+        writer = csv.writer(stream, delimiter=":", lineterminator="\n")
         for rule in self.get_all_transcodings():
-            line = f"{rule.instrument_param_name}:{rule.lis_exam_code}"
-            if rule.lis_substance_code is not None:
-                line += f":{rule.lis_substance_code}"
-            lines.append(line)
-        return "\n".join(lines) + ("\n" if lines else "")
+            fields = [rule.instrument_param_name, rule.lis_exam_code,
+                      rule.lis_substance_code or "", rule.description]
+            if any("\r" in field for field in fields):
+                # Con terminatore LF il writer non quota un CR isolato: in
+                # questo caso quota tutti i campi per conservarlo nel testo.
+                csv.writer(stream, delimiter=":", lineterminator="\n",
+                           quoting=csv.QUOTE_ALL).writerow(fields)
+            else:
+                writer.writerow(fields)
+        return stream.getvalue()
 
     def delete_transcoding(self, transcoding_id: int) -> tuple[bool, str]:
         """Elimina una regola di transcodifica."""
@@ -699,8 +786,8 @@ class Database:
             * Inserisce i nuovi parametri con is_exported=0.
             * Aggiorna i valori dei parametri esistenti preservando lo stato is_exported
               (nessun re-invio automatico al LIS di test già esportati in precedenza).
-            * Aggiorna lo stato del campione a 'DA_ESPORTARE' se ci sono parametri pendenti,
-              oppure a 'ESPORTATO' se tutti risultano già inviati.
+            * Aggiorna lo stato contando solo i parametri mappati: ESPORTATO se
+              sono tutti inviati e c'è almeno una trasmissione effettiva.
           - Se merge=False e overwrite=False, ritorna (False, msg, sample_id).
           - Se merge=False e overwrite=True, cancella e ricrea tutti i risultati.
         """
@@ -795,11 +882,10 @@ class Database:
                         ))
                         new_params_count += 1
 
-                # Verifica se ci sono parametri ancora da esportare
-                cursor.execute("SELECT COUNT(*) AS cnt FROM sample_results WHERE sample_id = ? AND is_exported = 0", (sample_id,))
-                pending_cnt = cursor.fetchone()["cnt"]
-
-                new_status = "DA_ESPORTARE" if pending_cnt > 0 else "ESPORTATO"
+                # Aggiungere un non mappato non riapre un campione completato;
+                # reimportarlo con una nuova mappatura lo rende invece pendente.
+                pending_cnt, sent_cnt = self._get_export_progress(conn, sample_id)
+                new_status = "ESPORTATO" if pending_cnt == 0 and sent_cnt > 0 else "DA_ESPORTARE"
 
                 cursor.execute("""
                     UPDATE samples SET
@@ -861,7 +947,9 @@ class Database:
         query = """
             SELECT s.*,
                    COUNT(r.id) AS results_count,
-                   SUM(CASE WHEN r.is_exported = 0 THEN 1 ELSE 0 END) AS pending_results_count
+                   SUM(CASE WHEN r.is_exported = 0 AND r.is_mapped = 1
+                            AND TRIM(COALESCE(r.lis_exam_code, '')) <> ''
+                            THEN 1 ELSE 0 END) AS pending_results_count
             FROM samples s
             LEFT JOIN sample_results r ON s.id = r.sample_id
             WHERE 1=1
@@ -967,7 +1055,7 @@ class Database:
                 return None
 
             results = self.get_sample_results(sample_id)
-            pending_cnt = sum(1 for r in results if not r.is_exported)
+            pending_cnt = sum(1 for r in results if r.has_lis_mapping and not r.is_exported)
             return SampleRecord(
                 id=row["id"],
                 sample_code=row["sample_code"],
@@ -1018,8 +1106,9 @@ class Database:
         """Aggiorna lo stato dei singoli parametri esportati a is_exported = 1.
 
         Ricalcola lo stato dei campioni coinvolti:
-        - Se tutti i parametri di un campione sono ora esportati, il campione passa a 'ESPORTATO'.
-        - Se ha ancora parametri con is_exported = 0, il campione rimane 'DA_ESPORTARE'.
+        - ESPORTATO quando tutti i risultati mappati sono inviati e almeno uno
+          è stato realmente trasmesso; i non mappati non bloccano il campione.
+        - DA_ESPORTARE se restano risultati mappati pendenti o non c'è alcun invio.
         """
         if not sample_ids and not result_ids:
             return
@@ -1040,15 +1129,9 @@ class Database:
 
             # 2. Ricalcola lo stato per ciascun campione coinvolto
             for s_id in set(sample_ids):
-                cursor.execute("""
-                    SELECT COUNT(*) AS pending
-                    FROM sample_results
-                    WHERE sample_id = ? AND is_exported = 0
-                """, (s_id,))
-                row = cursor.fetchone()
-                pending = row["pending"] if row else 0
+                pending, sent = self._get_export_progress(conn, s_id)
 
-                if pending == 0:
+                if pending == 0 and sent > 0:
                     cursor.execute("""
                         UPDATE samples SET
                             status = 'ESPORTATO',
