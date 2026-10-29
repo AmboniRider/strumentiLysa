@@ -22,7 +22,8 @@ import src.update_service as service
 
 @pytest.mark.skipif(os.name != "nt" or os.getenv("STRUMENTI_UPDATE_E2E") != "1",
                     reason="Impostare STRUMENTI_UPDATE_E2E=1 per il collaudo Windows isolato")
-def test_real_windows_install_update_offline_and_recovery(tmp_path: Path, monkeypatch):
+@pytest.mark.parametrize("intranet", [False, True])
+def test_real_windows_install_update_offline_and_recovery(tmp_path: Path, monkeypatch, intranet: bool):
     """Esegue vero uv, runner esterno, GUI nascosta e recupero senza Git/rete."""
     root = tmp_path / "PC installato con spazi è"
     root.mkdir()
@@ -50,7 +51,18 @@ def test_real_windows_install_update_offline_and_recovery(tmp_path: Path, monkey
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     payload = next(manifest_path.parent.glob("*.zip")).read_bytes()
     monkeypatch.setattr(service, "download", lambda *args: payload)
-    job = stage_release(Release(manifest["version"], "", "", manifest), root, 1)
+    if intranet:
+        from src.intranet_updates import check_intranet_release
+        distribution = os.getenv("STRUMENTI_INTRANET_E2E_RELEASE")
+        if not distribution:
+            pytest.skip("Impostare STRUMENTI_INTRANET_E2E_RELEASE alla distribuzione offline reale")
+        release = check_intranet_release("1.1.0", Path(distribution))
+        manifest = release.manifest
+        job = stage_release(release, root, 1)
+        # Cache nuova e vuota: l'esito non può dipendere dal PC di sviluppo.
+        (root / ".uv-cache").mkdir()
+    else:
+        job = stage_release(Release(manifest["version"], "", "", manifest), root, 1)
     base = getattr(sys, "_base_executable", sys.executable)
     env = os.environ.copy()
     env.update(UV_OFFLINE="1", PYTHONPATH="")

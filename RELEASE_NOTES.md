@@ -1,3 +1,20 @@
+# Strumenti LYSA 2.2.1 — Aggiornamenti intranet offline
+
+**Versione tecnica:** 2.2.1 — **Autore:** Amboni Paolo A.
+
+- Nuovo pulsante **Aggiorna tramite intranet** in Impostazioni → Aggiornamenti
+  e backup, riservato agli amministratori. Confronta la versione sulla condivisione
+  `\\srvshare\lab_dati\SOFTWARE_DATI\Strumenti` con quella installata.
+- Programma e dipendenze Windows x64 Python 3.11–3.13 vengono copiati e verificati
+  con SHA-256 prima della chiusura. L'installazione non richiede Internet o cache
+  Python preesistente, e può proseguire dopo la disconnessione dalla condivisione.
+- Riutilizzati backup completo, recupero transcodifiche, collaudo d'avvio e rollback.
+  Schema invariato (1); nessun database o dato operativo distribuito.
+- Bootstrap `aggiorna_intranet.py` per la prima adozione sulle vecchie postazioni.
+  Preparazione riproducibile con `build_release.py --intranet-offline`.
+
+---
+
 # Strumenti LYSA 2.1 — Gestione esami non mappati e nuova strumentazione
 
 **Versione tecnica:** 2.1.0

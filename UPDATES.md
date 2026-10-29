@@ -1,5 +1,77 @@
 # Aggiornamenti e copie del database
 
+## Aggiornamento tramite intranet (dalla 2.2.0)
+
+La condivisione di distribuzione è `\\srvshare\lab_dati\SOFTWARE_DATI\Strumenti`.
+Con un utente **ADMIN**, aprire **Impostazioni → Aggiornamenti e backup →
+Aggiorna tramite intranet**. Il programma confronta la versione stabile nel
+manifest con quella installata: versioni uguali o precedenti non sono proposte.
+Se compare una versione nuova, leggere le note e scegliere **Installa e riavvia**.
+
+Il controllo e la copia SMB si svolgono in un worker, mantenendo la GUI utilizzabile;
+una condivisione non raggiungibile o un manifest non valido producono un messaggio
+nel pannello. Le attese SMB dipendono dai timeout di Windows e della rete aziendale.
+Il pulsante GitHub resta disponibile separatamente; selezionando un'origine si
+azzera la release precedentemente rilevata, evitando installazioni dall'origine errata.
+Il controllo automatico all'avvio continua a usare GitHub, senza cambiare il lavoro offline.
+
+Il canale intranet **non richiede Internet**: programma e wheel Windows x64 per
+CPython 3.11–3.13 vengono copiati in `.updates/<id>/`, verificati con SHA-256
+sia come archivio sia per singolo file, prima di chiudere l'app. Durante
+l'installazione `uv pip sync` usa solo le wheel locali, con `--offline`,
+`--no-index` e `--require-hashes`; non usa la cache come prerequisito e non scarica
+Python. Dopo lo staging la condivisione può essere disconnessa. Vengono conservati
+backup del database, transcodifiche, vecchio codice e ambiente, con gli stessi
+controlli d'avvio e rollback del canale GitHub. Schema destinazione: 1.
+
+### Prima adozione sulle postazioni prive del pulsante
+
+Chiudere l'app e aprire PowerShell **nella cartella locale installata**. Eseguire:
+
+```powershell
+.\.venv\Scripts\python.exe "\\srvshare\lab_dati\SOFTWARE_DATI\Strumenti\aggiorna_intranet.py" .
+```
+
+Il bootstrap verifica il nuovo runtime prima di importarlo, prepara programma e
+dipendenze in locale e chiede di digitare **SI**. Il runner verificato della nuova
+release crea i backup e installa senza Internet; il programma si riavvia al termine.
+Non viene inizializzato un database diverso né copiato un database dalla rete.
+Il bootstrap rifiuta le politiche `reset`; un reset richiede la GUI con consenso
+specifico. Sono richieste un'installazione da pacchetto, `.tools/uv.exe` e il Python
+locale funzionante. Le copie Git usano il normale flusso di sviluppo.
+
+### Preparazione e pubblicazione intranet
+
+Sul PC che prepara le release serve Internet per scaricare le sole wheel runtime
+dal lock, verificandole rispetto agli hash di `uv.lock`. Generare in una cartella nuova:
+
+```powershell
+uv run python build_release.py --intranet-offline --output dist/intranet-2.2.1
+```
+
+Distribuire nella condivisione solo:
+
+- `strumenti-update-2.2.1.zip`: sorgenti, documentazione e launcher installato;
+- `strumenti-dependencies-2.2.1.zip`: wheel runtime e requirements con hash;
+- `update-manifest.json`: versione, politica DB, note e checksum di entrambi gli archivi;
+- `aggiorna_intranet.py`: bootstrap per la prima adozione;
+- `LEGGIMI-AGGIORNAMENTO.txt`: istruzioni locali;
+- `SHA256SUMS.txt`: riepilogo dei digest per verifica amministrativa.
+
+Per le pubblicazioni successive copiare prima gli archivi con nome di versione,
+verificare i digest letti dalla condivisione e sostituire **il manifest per ultimo**
+con rinomina del file temporaneo nella stessa directory. Non sostituire archivi
+di una versione già pubblicata. Nessun database, dato operativo, ambiente virtuale,
+credenziale o strumento di sviluppo viene distribuito. Gli hash rilevano alterazioni
+e copie incomplete; l'autorizzazione della distribuzione dipende dai permessi SMB:
+scrittura ai soli responsabili delle release, lettura alle postazioni.
+
+Verifica manuale di un file, confrontando il risultato con `SHA256SUMS.txt`:
+
+```powershell
+Get-FileHash -Algorithm SHA256 "\\srvshare\lab_dati\SOFTWARE_DATI\Strumenti\strumenti-update-2.2.1.zip"
+```
+
 ## Uso sulla postazione installata
 
 La **2.1.0** aggiunge Agilent 6460 LCMS, gestione dei risultati non mappati e
@@ -80,7 +152,9 @@ La funzione di ripristino manuale dei backup non è inclusa nel pannello.
 
 L'installazione automatica è destinata ai pacchetti Windows x64 creati da
 `transfer.bat`, con `.tools/uv.exe`, runtime e ambiente virtuale locali.
-Per installare aggiornamenti e dipendenze serve Internet; l'uso successivo resta offline.
+Il canale GitHub richiede Internet per aggiornamenti e dipendenze. Il canale
+intranet dalla 2.2.0 include le dipendenze e funziona completamente offline.
+L'uso ordinario resta offline.
 Le copie di sviluppo con `.git` permettono controlli e backup ma usano il flusso
 Git per aggiornare il codice, conservando le modifiche locali.
 

@@ -139,9 +139,13 @@ def test_update_panel_admin_controls(test_db: Database, admin_user: UserRecord, 
         assert dialog.backup_button.cget("text") == "Crea copia database"
         assert dialog.install_button.cget("state") == "disabled"
         assert dialog.check_button.cget("state") == "normal"
+        assert dialog.intranet_button.cget("text") == "Aggiorna tramite intranet"
+        assert dialog.intranet_button.cget("state") == "normal"
         SessionManager.logout()
         with pytest.raises(PermissionError):
             dialog._backup()
+        with pytest.raises(PermissionError):
+            dialog._check_intranet()
     finally:
         dialog._close()
         controller.close()

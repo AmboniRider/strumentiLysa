@@ -36,7 +36,7 @@ RUNTIME_FILES = (
     "src/gui/__init__.py", "src/gui/app_window.py", "src/gui/help_dialog.py",
     "src/gui/login_view.py", "src/gui/master_detail.py", "src/gui/password_dialog.py",
     "src/gui/settings_dialog.py", "src/gui/theme.py",
-    "src/backup.py", "src/update_service.py", "src/gui/update_dialog.py", "src/gui/license_dialog.py",
+    "src/backup.py", "src/update_service.py", "src/intranet_updates.py", "src/gui/update_dialog.py", "src/gui/license_dialog.py",
     "driver_implementati/README.md", "driver_implementati/dionex_ic.md",
     "driver_implementati/mettler_toledo.md", "driver_implementati/spettrofotometro_uv_vis.md",
     "driver_implementati/agilent_5977c.md",

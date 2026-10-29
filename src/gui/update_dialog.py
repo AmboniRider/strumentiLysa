@@ -21,6 +21,7 @@ from src.auth import SessionManager
 from src.backup import dated_backup
 from src.config import BASE_DIR
 from src.update_service import REPOSITORY, Release, UpdateError, check_release, stage_release
+from src.intranet_updates import INTRANET_DIRECTORY, check_intranet_release
 
 
 class UpdateController:
@@ -38,17 +39,23 @@ class UpdateController:
         self.listeners: list[Callable[[], None]] = []
         self.timer = window.after(100, self._poll)
         self.notice_checked = False
+        self.source = "GitHub"
 
-    def check(self) -> None:
+    def check(self, intranet: bool = False) -> None:
         """Accoda una sola verifica per volta, richiamabile anche dal pannello."""
-        if self.busy:
+        if self.busy or self.operation_busy:
             return
+        self.source = "Intranet" if intranet else "GitHub"
+        # Un cambio origine non deve lasciare installabile la release precedente.
+        self.release = None
+        self.error = ""
+        self.checked = False
         self.busy = True
         self._notify_listeners()
 
         def worker() -> None:
             try:
-                self.events.put((check_release(), ""))
+                self.events.put((check_intranet_release() if intranet else check_release(), ""))
             except Exception as exc:
                 # Il messaggio distingue TLS, HTTP e timeout; resta consultabile
                 # anche nella console senza stampare URL o credenziali locali.
@@ -181,12 +188,15 @@ class UpdateDialog(ctk.CTkToplevel):
         ctk.CTkLabel(self, text=f"Versione installata: {__version__}", font=("Arial", 19, "bold")).pack(pady=15)
         self.status = ctk.CTkLabel(self, text="", wraplength=710)
         self.status.pack(padx=15, pady=5)
+        ctk.CTkLabel(self, text=f"Intranet: {INTRANET_DIRECTORY}", wraplength=710).pack(padx=15)
         self.notes = ctk.CTkTextbox(self, wrap="word")
         self.notes.pack(fill="both", expand=True, padx=20, pady=10)
         actions = ctk.CTkFrame(self)
         actions.pack(fill="x", padx=20, pady=10)
-        self.check_button = ctk.CTkButton(actions, text="Verifica aggiornamenti", command=self._check)
+        self.check_button = ctk.CTkButton(actions, text="Verifica GitHub", command=self._check)
         self.check_button.pack(side="left", padx=5, pady=10)
+        self.intranet_button = ctk.CTkButton(actions, text="Aggiorna tramite intranet", command=self._check_intranet)
+        self.intranet_button.pack(side="left", padx=5, pady=10)
         self.install_button = ctk.CTkButton(actions, text="Installa e riavvia", command=self._install)
         self.install_button.pack(side="left", padx=5)
         self.backup_button = ctk.CTkButton(actions, text="Crea copia database", command=self._backup)
@@ -203,22 +213,28 @@ class UpdateDialog(ctk.CTkToplevel):
         controller = self.controller
         notes = controller.release.notes if controller.release else ""
         if controller.busy:
-            status = "Verifica GitHub in corso…"
+            status = f"Verifica {controller.source} in corso…"
         elif controller.error:
-            status = controller.error + "\nAggiornamento manuale tramite Git: istruzioni qui sotto."
+            status = controller.error
             # Il testo lungo resta copiabile e scorrevole: non comprime i
             # pulsanti e compare solo quando il controllo non è riuscito.
-            notes = manual_git_update_help(BASE_DIR)
+            if controller.source == "GitHub":
+                status += "\nAggiornamento manuale tramite Git: istruzioni qui sotto."
+                notes = manual_git_update_help(BASE_DIR)
+            else:
+                notes = "Verificare che la condivisione sia accessibile e contenga update-manifest.json, " \
+                        "lo ZIP del programma e lo ZIP delle dipendenze. Riprovare Aggiorna tramite intranet."
         elif controller.release:
-            status = f"Disponibile: {controller.release.version}\n{controller.release.database_message}"
+            status = f"{controller.source} — Disponibile: {controller.release.version}\n{controller.release.database_message}"
         else:
-            status = "Nessuna nuova versione disponibile." if controller.checked else "Verifica non ancora eseguita."
+            status = f"{controller.source}: nessuna nuova versione disponibile." if controller.checked else "Verifica non ancora eseguita."
         self.status.configure(text=status)
         self.notes.configure(state="normal")
         self.notes.delete("1.0", "end")
         self.notes.insert("1.0", notes)
         self.notes.configure(state="disabled")
         self.check_button.configure(state="disabled" if controller.busy or self.pending else "normal")
+        self.intranet_button.configure(state="disabled" if controller.busy or self.pending else "normal")
         self.backup_button.configure(state="disabled" if self.pending else "normal")
         self.install_button.configure(state="normal" if controller.release and not self.pending and not controller.busy else "disabled")
 
@@ -226,6 +242,11 @@ class UpdateDialog(ctk.CTkToplevel):
         """Verifica manuale consentita soltanto alla sessione amministrativa."""
         require_admin()
         self.controller.check()
+
+    def _check_intranet(self) -> None:
+        """Seleziona la condivisione SMB; l'installazione richiede poi conferma."""
+        require_admin()
+        self.controller.check(intranet=True)
 
     def _run(self, function: Callable) -> None:
         """Esegue download e backup con un solo lavoro amministrativo per volta."""

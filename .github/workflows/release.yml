@@ -51,9 +51,12 @@ jobs:
               with (directory / (code + ".txt")).open("xb") as output:
                   output.write(content)
           '@ | uv run --no-sync python -
+      - name: Prepara distribuzione intranet per il collaudo offline reale
+        run: uv run --no-sync python build_release.py --intranet-offline --output dist/intranet-ci
       - run: uv run --no-sync python -m pytest -q
         env:
           STRUMENTI_UPDATE_E2E: '1'
+          STRUMENTI_INTRANET_E2E_RELEASE: ${{ github.workspace }}/dist/intranet-ci
       - run: uv run --no-sync python build_release.py
       - name: Pubblica Release stabile dopo il superamento dei test
         env:

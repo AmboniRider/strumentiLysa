@@ -30,7 +30,9 @@ tramite driver dedicati.
 - **Correzione di bug:** selezioni di esportazione, eliminazione utenti con
   conservazione dell'audit, primo accesso e aggiornamento del titolo finestra.
 
-La versione tecnica è **2.1.0**. Aggiunge il driver **Agilent 6460 LCMS** e
+La versione tecnica è **2.2.1**. Include aggiornamenti intranet completamente
+offline da `\\srvshare\lab_dati\SOFTWARE_DATI\Strumenti` (vedi `UPDATES.md`).
+La 2.1.0 aggiunge il driver **Agilent 6460 LCMS** e
 corregge la gestione degli esami non mappati: acquisiti e segnalati, vengono
 ignorati nel CSV e non impediscono il completamento del campione quando tutti
 i risultati mappati sono inviati. I campioni già completati vengono riallineati

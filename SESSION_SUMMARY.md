@@ -1,5 +1,70 @@
 # SESSION SUMMARY
 
+## Release 2.2.1, visibilità pubblica e sync GitHub — 2026-10-29
+### Decisions and Activities
+- L'utente ha richiesto repository pubblico, sincronizzazione e versione 2.2.1.
+- Verificati remoto AmboniRider/strumentiLysa e ramo main; le modifiche da
+  sincronizzare sono quelle dell'updater intranet appena implementato.
+- Repository inizialmente privato secondo API GitHub; browser integrato da
+  autenticare. Nessun database o file di credenziali tracciato nel checkout.
+- Allineati versione tecnica, README, note e istruzioni dei pacchetti alla 2.2.1.
+  La cronologia 2.2.0 resta documentata; schema database invariato.
+- Workflow Release: prepara la distribuzione offline prima dei test e passa
+  STRUMENTI_INTRANET_E2E_RELEASE, così esegue anche il collaudo intranet reale.
+### Issues and Solutions
+- Il connettore GitHub non espone la modifica della visibilità: uso del browser
+  autenticato per le impostazioni del repository; Git per la sincronizzazione.
+- Collaudo 2.2.1: **280 passed in 124.44s**, con entrambi i test Windows reali
+  abilitati, incluse wheel offline e cache vuota. Verificati manifest, versioni,
+  CRC e SHA-256 dei 41 file runtime e delle 7 wheel; nessun database distribuito.
+- Aggiornato il solo numero di versione del progetto nel lock, senza cambiare
+  dipendenze; `uv export --locked --offline` ha verificato il lock nella build.
+- Pubblicata e verificata distribuzione intranet 2.2.1 nella condivisione,
+  mantenendo gli archivi 2.2.0 e sostituendo il manifest per ultimo.
+- Il controllo UI di Edge si è interrotto perché l'indirizzo corrente non era
+  verificabile. Visibilità impostata tramite REST GitHub con autenticazione Git
+  già disponibile, solo in memoria; verificato accesso pubblico senza credenziali.
+  Repository ora `public`: https://github.com/AmboniRider/strumentiLysa.
+
+## Aggiornamento intranet offline — 2026-10-29
+### Decisions and Activities
+- Richiesta origine `\\srvshare\lab_dati\SOFTWARE_DATI\Strumenti`; l'utente
+  ha confermato funzionamento completamente senza Internet.
+- Aggiunto pulsante ADMIN nella GUI esistente, con origine distinta da GitHub,
+  confronto versioni e staging locale verificato prima della chiusura.
+- Distribuzione 2.2.0: ZIP runtime senza dati, ZIP wheel Windows x64 Python
+  3.11–3.13 da uv.lock, requirements con hash, manifest, checksum e istruzioni.
+- Riutilizzati backup e rollback del runner; offline usa uv pip sync con hash,
+  no-index, no download Python. Schema SQLite invariato (1).
+- Bootstrap condiviso per prima adozione, con verifica prima degli import,
+  consenso locale e rifiuto reset; nessuna modifica al database operativo qui.
+### Issues and Solutions
+- Condivisione non accessibile dalla sandbox; lettura fuori sandbox riuscita,
+  directory vuota. Pubblicati dopo il collaudo i sei file richiesti, senza
+  sovrascritture e con manifest rinominato per ultimo dopo verifica dei digest.
+- TMP sandbox non utilizzabile da uv: directory temporanea di test nel progetto.
+- Verifica mirata: 72 test superati. Suite completa con
+  `STRUMENTI_UPDATE_E2E=1` e distribuzione offline reale: **280 passed in 144.79s**.
+  Include entrambi i canali, vera installazione Windows senza Internet e con cache
+  vuota, dati/password/transcodifiche preservati, GUI e recupero da interruzione.
+  Si tratta di copie isolate sul PC corrente, non di una postazione fisica distinta.
+- Distribuzione finale riletta dal client sulla condivisione reale: correttamente
+  proposta 2.2.0 a un client 2.1.0, stessa versione esclusa. Verificati CRC,
+  SHA-256 di entrambi gli archivi, 41 file runtime e 7 wheel; nessun database.
+  Test finale del bootstrap: 1 passed. `git diff --check` senza errori.
+- Pubblicati `strumenti-update-2.2.0.zip` (294272 byte),
+  `strumenti-dependencies-2.2.0.zip` (22114504 byte), `update-manifest.json`,
+  `aggiorna_intranet.py`, `LEGGIMI-AGGIORNAMENTO.txt` e `SHA256SUMS.txt`.
+  Nessun commit/push o pubblicazione GitHub effettuato in questa sessione.
+- File modificati per l'implementazione: `src/intranet_updates.py` (nuovo),
+  `src/update_service.py`, `src/gui/update_dialog.py`, `update_runner.py`;
+  packaging/adozione in `build_release.py`, `aggiorna_intranet.py` (nuovo),
+  `trasfer.py`; regressioni in `tests/test_updates.py`,
+  `tests/test_update_installation.py`, `tests/test_version_config.py`.
+  Versione in `src/__init__.py`, `pyproject.toml`, `uv.lock`; istruzioni,
+  note e architettura in README, RELEASE_NOTES, UPDATES, PROJECT_CONTEXT
+  e questo SESSION_SUMMARY. Nessun dato operativo modificato.
+
 ## Release 2.1.0 e sincronizzazione GitHub — 2026-10-27
 ### Decisions and Activities
 - L'utente ha richiesto versione 2.1, note su gestione esami non mappati,

@@ -242,9 +242,23 @@ def apply_update(root: Path, job: Path, restart: bool = True) -> bool:
         env = os.environ.copy()
         env.update(UV_PROJECT_ENVIRONMENT=str(root / ".venv"), VIRTUAL_ENV="",
                    UV_CACHE_DIR=str(root / ".uv-cache"), UV_PYTHON_INSTALL_DIR=str(root / ".runtime/python"))
-        run_checked([str(root / ".tools/uv.exe"), "sync", "--locked", "--no-dev", "--no-install-project",
-                     "--python", sys.executable], root, env)
         python = root / ".venv/Scripts/python.exe"
+        if "offline" in manifest:
+            # Verifica nuovamente i file locali prima di modificare l'ambiente;
+            # l'installazione non dipende dalla cache o dalla rete SMB ancora attiva.
+            dependencies = job / "dependencies"
+            for name, digest in manifest["offline"]["files"].items():
+                if Path(name).name != name or name in (".", ".."):
+                    raise ValueError("Percorso dipendenza non valido")
+                if hashlib.sha256((dependencies / name).read_bytes()).hexdigest() != digest:
+                    raise ValueError("Dipendenza offline modificata dopo la verifica")
+            env.update(UV_OFFLINE="1", UV_PYTHON_DOWNLOADS="never")
+            run_checked([str(root / ".tools/uv.exe"), "pip", "sync", "--python", str(python),
+                         "--offline", "--no-index", "--require-hashes", "--find-links", str(dependencies),
+                         str(dependencies / "requirements.txt")], root, env)
+        else:
+            run_checked([str(root / ".tools/uv.exe"), "sync", "--locked", "--no-dev", "--no-install-project",
+                         "--python", sys.executable], root, env)
         candidate = job / "candidate.db"
         run_checked([str(python), "maintenance.py", "prepare", str(job / "database.db"), str(candidate),
                      str(job / "manifest.json")], root, env)

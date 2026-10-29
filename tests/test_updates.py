@@ -26,6 +26,7 @@ from src.gui.update_dialog import UpdateController, UpdateDialog, require_admin
 from src.update_service import (Release, UpdateError, check_release, safe_runtime_path,
                                 stage_release, validate_manifest, version_tuple)
 import src.update_service as service
+import src.intranet_updates as intranet
 
 
 @pytest.fixture
@@ -381,3 +382,151 @@ def test_second_instance_lock(tmp_path):
             update_runner.FileLock(tmp_path / "app.lock").acquire()
     finally:
         first.close()
+
+
+@pytest.fixture
+def shared_release(package, tmp_path):
+    """Condivisione sintetica: runtime reale e dipendenze fittizie per i guasti."""
+    manifest = deepcopy(package[0])
+    directory = tmp_path / "condivisione intranet"
+    directory.mkdir()
+    (directory / intranet.package_name(manifest["version"])).write_bytes(package[1])
+    contents = {"requirements.txt": b"example==1.0\n", "example-1.0-py3-none-any.whl": b"wheel di test"}
+    stream = io.BytesIO()
+    with ZipFile(stream, "w") as archive:
+        for name, content in contents.items():
+            archive.writestr(name, content)
+    dependencies = stream.getvalue()
+    name = f"strumenti-dependencies-{manifest['version']}.zip"
+    (directory / name).write_bytes(dependencies)
+    manifest["notes"] = "Note offline"
+    manifest["offline"] = {"package": name, "sha256": hashlib.sha256(dependencies).hexdigest(),
+                           "files": {name: hashlib.sha256(content).hexdigest() for name, content in contents.items()}}
+    (directory / "update-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return directory, manifest
+
+
+def test_intranet_versions_and_missing_share(shared_release, tmp_path):
+    """Rileva solo versioni successive; stessa versione/downgrade non installabili."""
+    directory, manifest = shared_release
+    release = intranet.check_intranet_release("1.1.0", directory)
+    assert release.directory == directory and release.notes == "Note offline"
+    assert intranet.check_intranet_release(__version__, directory) is None
+    assert intranet.check_intranet_release("99.0.0", directory) is None
+    with pytest.raises(UpdateError, match="non accessibile"):
+        intranet.check_intranet_release("1.1.0", tmp_path / "manca")
+
+
+@pytest.mark.parametrize("broken", ["json", "offline", "traversal", "url", "hash"])
+def test_intranet_invalid_manifest(shared_release, broken):
+    directory, manifest = shared_release
+    if broken == "offline":
+        del manifest["offline"]
+    elif broken == "traversal":
+        manifest["offline"]["files"]["../evil.whl"] = "0" * 64
+    elif broken == "url":
+        manifest["offline"]["package"] = "https://example.com/evil.zip"
+    elif broken == "hash":
+        manifest["offline"]["sha256"] = "invalid"
+    (directory / "update-manifest.json").write_text("{" if broken == "json" else json.dumps(manifest))
+    with pytest.raises(UpdateError):
+        intranet.check_intranet_release("1.1.0", directory)
+
+
+def test_intranet_stage_never_uses_http_and_survives_disconnection(shared_release, installation, monkeypatch):
+    directory, manifest = shared_release
+    monkeypatch.setattr(service, "download", Mock(side_effect=AssertionError("HTTP non consentito")))
+    release = intranet.check_intranet_release("1.1.0", directory)
+    job = stage_release(release, installation, 1)
+    shutil.rmtree(directory)
+    calls = []
+    before = logical(installation / "data/strumenti.db")
+    def run(command, root, env):
+        calls.append((command, env.copy()))
+        if len(command) > 2 and command[2] == "prepare":
+            maintenance.prepare_database(Path(command[3]), Path(command[4]), manifest)
+    monkeypatch.setattr(update_runner, "run_checked", run)
+    assert update_runner.apply_update(installation, job, restart=False)
+    command, env = calls[0]
+    assert command[1:3] == ["pip", "sync"]
+    assert all(option in command for option in ("--offline", "--no-index", "--require-hashes"))
+    assert env["UV_OFFLINE"] == "1" and env["UV_PYTHON_DOWNLOADS"] == "never"
+    assert logical(installation / "data/strumenti.db") == before
+
+
+@pytest.mark.parametrize("broken", ["runtime", "dependencies", "wheel", "extra", "missing"])
+def test_intranet_corruption_leaves_installation_intact(shared_release, installation, broken):
+    directory, manifest = shared_release
+    before = (installation / "app.py").read_bytes()
+    if broken in ("runtime", "dependencies"):
+        name = intranet.package_name(manifest["version"]) if broken == "runtime" else manifest["offline"]["package"]
+        (directory / name).write_bytes(b"alterato")
+    elif broken == "missing":
+        (directory / manifest["offline"]["package"]).unlink()
+    else:
+        path = directory / manifest["offline"]["package"]
+        stream = io.BytesIO()
+        with ZipFile(stream, "w") as archive:
+            archive.writestr("requirements.txt", b"alterato" if broken == "wheel" else b"example==1.0\n")
+            archive.writestr("example-1.0-py3-none-any.whl", b"wheel di test")
+            if broken == "extra":
+                archive.writestr("../evil.py", b"evil")
+        path.write_bytes(stream.getvalue())
+        manifest["offline"]["sha256"] = hashlib.sha256(stream.getvalue()).hexdigest()
+        (directory / "update-manifest.json").write_text(json.dumps(manifest))
+    release = intranet.check_intranet_release("1.1.0", directory)
+    with pytest.raises(UpdateError):
+        stage_release(release, installation, 1)
+    assert (installation / "app.py").read_bytes() == before
+    assert not list((installation / ".updates").iterdir())
+
+
+def test_intranet_rechecks_dependencies_before_sync(shared_release, installation, monkeypatch):
+    directory, _ = shared_release
+    job = stage_release(intranet.check_intranet_release("1.1.0", directory), installation, 1)
+    (job / "dependencies/requirements.txt").write_text("alterato")
+    run = Mock()
+    monkeypatch.setattr(update_runner, "run_checked", run)
+    before = (installation / "app.py").read_bytes()
+    assert not update_runner.apply_update(installation, job, restart=False)
+    run.assert_not_called()
+    assert (installation / "app.py").read_bytes() == before
+
+
+def test_runtime_wheels_exclude_development_packages():
+    names = [Path(wheel["url"]).name for wheel in build_release.runtime_wheels(trasfer.PROJECT_ROOT)]
+    assert not any("pytest" in name or "colorama" in name for name in names)
+    assert any("cp311-cp311-win_amd64" in name for name in names)
+    assert any("cp312-cp312-win_amd64" in name for name in names)
+    assert any("cp313-cp313-win_amd64" in name for name in names)
+
+
+def test_intranet_controller_isolated_from_github(monkeypatch, shared_release):
+    import src.gui.update_dialog as gui
+    directory, _ = shared_release
+    controller = UpdateController(SimpleNamespace(after=Mock(return_value="timer")))
+    monkeypatch.setattr(gui, "check_intranet_release", lambda: intranet.check_intranet_release("1.1.0", directory))
+    monkeypatch.setattr(gui, "check_release", Mock(side_effect=AssertionError("GitHub chiamato")))
+    monkeypatch.setattr(gui.threading, "Thread", lambda target, daemon: SimpleNamespace(start=target))
+    controller.check(intranet=True)
+    release, error = controller.events.get_nowait()
+    assert not error and release.directory == directory
+    assert controller.source == "Intranet" and controller.release is None
+    controller.busy = False
+    controller.operation_busy = True
+    controller.check()
+    assert controller.source == "Intranet"
+
+
+def test_bootstrap_checks_archive_before_import(shared_release, installation, tmp_path):
+    import aggiorna_intranet
+    directory, manifest = shared_release
+    old_init = installation / "src/__init__.py"
+    old_init.write_text('__version__ = "1.1.0"')
+    destination = tmp_path / "bootstrap"
+    aggiorna_intranet.prepare_bootstrap(installation, directory, destination)
+    assert (destination / "src/intranet_updates.py").is_file()
+    (directory / intranet.package_name(manifest["version"])).write_bytes(b"corrotto")
+    with pytest.raises(ValueError, match="Checksum"):
+        aggiorna_intranet.prepare_bootstrap(installation, directory, tmp_path / "non-estratto")
+    assert not (tmp_path / "non-estratto").exists()

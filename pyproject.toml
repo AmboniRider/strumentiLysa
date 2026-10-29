@@ -1,6 +1,6 @@
 [project]
 name = "strumenti-lis"
-version = "2.1.0"
+version = "2.2.1"
 description = "Interfaccia tra file strumenti di laboratorio e LIS"
 authors = [{ name = "Amboni Paolo A." }]
 readme = "progetto.md"

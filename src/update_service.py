@@ -144,6 +144,9 @@ class Release:
     notes: str
     url: str
     manifest: dict
+    # Solo il controllo intranet associa una directory: gli URL nel manifest
+    # restano compatibili con GitHub e non sono mai aperti per questa origine.
+    directory: Path | None = None
 
     @property
     def database_message(self) -> str:
@@ -245,7 +248,12 @@ def stage_release(release: Release, root: Path, schema: int, reset_confirmed: bo
     job = root / ".updates" / uuid.uuid4().hex
     job.mkdir(parents=True)
     try:
-        payload = download(release.manifest["package"]["url"])
+        if release.directory is None:
+            payload = download(release.manifest["package"]["url"])
+        else:
+            from src.intranet_updates import read_shared_file, package_name, stage_dependencies
+            payload = read_shared_file(release.directory / package_name(release.version), MAX_DOWNLOAD)
+            stage_dependencies(release, job)
         if hashlib.sha256(payload).hexdigest() != release.manifest["package"]["sha256"]:
             raise UpdateError("Checksum del pacchetto errato")
         archive_path = job / "package.zip"

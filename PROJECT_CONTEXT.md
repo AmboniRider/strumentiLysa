@@ -24,6 +24,13 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - **Licenza & Compatibilità**: Pienamente compatibile con GNU AGPLv3 (tutte le dipendenze esterne dirette e indirette adottano licenze permissive compatibili: MIT, BSD-3-Clause, BSD-2-Clause, Apache-2.0, HPND/MIT-CMU, PSF License; codice sorgente interno 100% originale privo di componenti proprietari terzi).
 
 ## Main Components
+- `src/intranet_updates.py`: origine SMB fissa
+  `\\srvshare\lab_dati\SOFTWARE_DATI\Strumenti`; confronto versioni, validazione
+  manifest offline e staging locale verificato delle wheel, senza richieste HTTP.
+- `build_release.py --intranet-offline`: distribuzione runtime e wheel Windows
+  x64 CPython 3.11–3.13 da uv.lock, requirements con hash e manifest esteso.
+  `aggiorna_intranet.py`: bootstrap iniziale standard-library per vecchie
+  postazioni; importa soltanto il runtime appena verificato e avvia il nuovo runner.
 - `Agilent6460LCMSDriver` in `driver.py`: report CSV con preambolo fino a
   SampleID; SampleName (3), Compound (4), FinalConcentration (6). Batch raggruppato
   per codice, prima misura per coppia campione-parametro, colonne extra ignorate.
@@ -154,6 +161,11 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - Visualizzazione predefinita con filtro di stato 'Da Esportare' e periodo dell'ultimo mese per mostrare prioritariamente i campioni pendenti da processare, con selettori rapidi per consultare gli esportati o l'intero storico.
 
 ## Technical Constraints
+- Il canale intranet 2.2.0 funziona senza Internet e senza cache preesistente.
+  Richiede Python base e uv già installati localmente. `uv pip sync` con hash,
+  offline e no-index usa le wheel copiate nel job; backup e rollback restano
+  quelli dell'updater. Pubblicare prima gli archivi e per ultimo il manifest.
+  Fiducia della distribuzione basata sui permessi SMB, integrità su SHA-256.
 - Requisiti della distribuzione documentati nel README: Windows 10 o successivi
   x64 Intel/AMD, cartelle scrivibili, Internet per installazione/aggiornamento e
   uso ordinario offline. CPU/RAM/schermo sono indicazioni di dimensionamento,
@@ -171,6 +183,15 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - Nessuna perdita accidentale di dati originali (i file elaborati vengono archiviati, non cancellati).
 
 ## Current Status & Active TODO
+- **2.2.1 (2026-10-29)**: metadati e pacchetti allineati alla nuova release;
+  workflow Windows esteso al collaudo intranet con wheel offline reali.
+  Verifica locale completa: 280 test superati, inclusi i due collaudi Windows.
+  Distribuzione intranet 2.2.1 pubblicata; repository GitHub pubblico verificato
+  con richiesta non autenticata.
+- **2.2.0 (2026-10-29)**: aggiornamenti intranet offline implementati e collaudati;
+  280 test superati inclusa installazione Windows reale su copie isolate.
+  Distribuzione SMB composta esclusivamente da runtime, dipendenze, bootstrap,
+  manifest, checksum e istruzioni. Prima adozione descritta in UPDATES.md.
 - **2026-10-27 — Release 2.1.0 pubblicata**: non mappati, Agilent 6460 LCMS e
   correzioni minori, incluse descrizioni TXT. Versione e lockfile allineati;
   schema 1 e contratti LIS invariati. Commit release `2f65535`, tag `v2.1.0`;
