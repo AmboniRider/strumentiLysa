@@ -1,5 +1,25 @@
 # SESSION SUMMARY
 
+## Sync GitHub e pubblicazione intranet automatica — 2026-10-29
+### Decisions and Activities
+- Esteso sync.bat a cinque passi: dopo push, solo su main, esegue tramite uv
+  il nuovo sync_intranet.py. --check rimane locale; uv ora è un prerequisito.
+- Il publisher genera con build_release la distribuzione offline soltanto per
+  versioni nuove. Stessa versione o versione condivisa superiore: nessuna build.
+- Lock SMB, archivi immutabili, verifica SHA-256 degli archivi e dei contenuti,
+  copia temporanea riletta e manifest rinominato per ultimo. Versioni precedenti
+  conservate; errori intranet distinti dal sync GitHub già completato.
+- Aggiornati README, UPDATES e PROJECT_CONTEXT; aggiunte regressioni del publisher
+  in tests/test_updates.py. Versione applicativa invariata (2.2.1).
+### Issues and Solutions
+- Copie interrotte: mantiene il vecchio manifest e rimuove solo gli archivi nuovi
+  creati dal tentativo fallito, consentendo di riprovare senza collisioni.
+- Verifica mirata iniziale: 60 test superati; sync.bat --check eseguito senza rete.
+- Verifica finale dopo gestione errori: **60 passed in 14.94s**;
+  controllo batch locale e git diff --check riusciti. Publisher eseguito sulla
+  condivisione reale: rileva 2.2.1 già presente e salta senza ricreare pacchetti.
+  Nessuna nuova versione pubblicata, né commit/push effettuati in questa sessione.
+
 ## Release 2.2.1, visibilità pubblica e sync GitHub — 2026-10-29
 ### Decisions and Activities
 - L'utente ha richiesto repository pubblico, sincronizzazione e versione 2.2.1.
@@ -1096,4 +1116,26 @@
 
 
 
+
+# Sessione 2026-10-29 — Esportazione parziale sostanze
+
+- **Decisioni e attività**: esportare le sole sostanze selezionate anche se mancanti, duplicate o fuori catalogo, senza segnalazioni relative al gruppo; mantenere il campione in sospeso per sostanze attese mancanti.
+- **Problemi e soluzioni**: aggiornato il ricalcolo dello stato dopo esportazione, reimportazione e avvio; verificati invio successivo e compatibilità con selezione individuale su database isolati.
+- **Verifiche**: 41 test mirati superati sulla copia di lavoro, inclusa esportazione parziale e successivo completamento.
+
+# Sessione 2026-10-29 — Ripristino completezza sostanze
+
+- **Decisioni e attività**: annullata l'esportazione parziale delle sostanze e ripristinato il controllo di completezza, duplicati e catalogo prima dell'invio.
+- **Problemi e soluzioni**: ripristinati ricalcolo dello stato, test e manuale precedenti; nessuna modifica ai dati dei campioni.
+
+# Sessione 2026-10-29 — Evidenza campioni incompleti
+
+- **Decisioni e attività**: campioni con sostanze mancanti evidenziati in rosso e deselezionati inizialmente; resta possibile selezionarli manualmente per altri esami.
+- **Problemi e soluzioni**: valutazione sul catalogo attivo e sui risultati acquisiti; ripristino della visualizzazione normale dopo completamento.
+- **Verifiche**: test di selezione e sostanze su database isolati.
+
+# Sessione 2026-10-29 — Rilascio 2.3.0
+
+- **Decisioni e attività**: avanzata la versione minore a 2.3.0 per il miglioramento gestione sostanze incomplete; aggiornati metadati e note di rilascio.
+- **Verifiche**: suite completa 284 test superati e 2 saltati; uv.lock coerente. Sincronizzazione GitHub e intranet avviata.
 

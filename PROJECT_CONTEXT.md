@@ -1,5 +1,11 @@
 # PROJECT CONTEXT
 
+## Versione 2.3.0
+- Miglioramento gestione sostanze incomplete: campioni evidenziati e deselezionati per impostazione predefinita, con esportazione selettiva invariata.
+
+## Campioni con sostanze incomplete
+- La tabella campioni evidenzia in rosso e deseleziona per default i campioni con sostanze mancanti rispetto al catalogo attivo degli esami presenti. La selezione manuale rimane disponibile; il controllo dell'esportatore non cambia.
+
 ## Authentication Architecture — verifica del 2026-10-05
 - Login desktop locale: `LoginView` cerca l'utente su SQLite, verifica la password e passa il `UserRecord` alla dashboard; nessun endpoint HTTP o provider OAuth nel codice applicativo esaminato.
 - `src/auth.py` genera salt casuali di 16 byte e calcola SHA-256 di `salt:password`, verificato tramite `secrets.compare_digest`. Hash e salt sono memorizzati in `users` nel database locale `data/strumenti.db`.
@@ -24,6 +30,10 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
 - **Licenza & Compatibilità**: Pienamente compatibile con GNU AGPLv3 (tutte le dipendenze esterne dirette e indirette adottano licenze permissive compatibili: MIT, BSD-3-Clause, BSD-2-Clause, Apache-2.0, HPND/MIT-CMU, PSF License; codice sorgente interno 100% originale privo di componenti proprietari terzi).
 
 ## Main Components
+- `sync_intranet.py`: quinto passo di `sync.bat` dopo il push, solo su main;
+  confronto versioni SMB, build offline in staging, lock publisher, verifica
+  degli archivi/file, copia verificata e manifest per ultimo. Preserva versioni
+  precedenti e impedisce sostituzioni di archivi con contenuto diverso.
 - `src/intranet_updates.py`: origine SMB fissa
   `\\srvshare\lab_dati\SOFTWARE_DATI\Strumenti`; confronto versioni, validazione
   manifest offline e staging locale verificato delle wheel, senza richieste HTTP.

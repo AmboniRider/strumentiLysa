@@ -340,6 +340,9 @@ normalizzazione numerica sono gli stessi degli esami standard.
 L'elenco delle transcodifiche attive di quell'esame costituisce il catalogo obbligatorio.
 La selezione resta individuale: per inviare l'esame devono essere presenti e selezionate
 tutte le sostanze del catalogo corrente, con un solo risultato per ciascun codice.
+I campioni con almeno un esame a sostanze presenti ma incomplete sono evidenziati
+in rosso e inizialmente deselezionati. Possono essere selezionati manualmente per
+inviare altri esami validi; l'esame incompleto resta escluso dall'esportazione.
 Se manca una sostanza, una spunta è disattivata, un codice è duplicato o è fuori
 catalogo, viene saltato l'intero esame. Gli altri esami completi e gli standard vengono
 comunque esportati. Se l'esame è interamente deselezionato, non viene richiesto alcun invio.

@@ -41,6 +41,35 @@ def exported_pairs(directory: Path) -> set[tuple[str, str]]:
     return set(pairs)
 
 
+def test_incomplete_substances_default_selection_and_completion(
+    test_db: Database, admin_user: UserRecord, ctk_root: ctk.CTk,
+):
+    """Un gruppo incompleto è rosso e non spuntato, ma resta selezionabile."""
+    for name, code in (("Sostanza A", "A"), ("Sostanza B", "B")):
+        assert test_db.save_transcoding(name, "GRUPPO", lis_substance_code=code)[0]
+    sample = save_selection_sample(test_db, 1)
+    first = ParsedResult("Sostanza A", "1", 1.0, "1", lis_exam_code="GRUPPO", is_mapped=True, lis_substance_code="A")
+    second = ParsedResult("Sostanza B", "2", 2.0, "2", lis_exam_code="GRUPPO", is_mapped=True, lis_substance_code="B")
+    assert test_db.save_sample_with_results(sample, [first], merge=True)[0]
+    view = MasterDetailView(ctk_root, test_db, admin_user, lambda: None)
+    try:
+        assert sample.id not in view.selected_sample_ids
+        assert sample.id in view._incomplete_substance_samples
+        assert "Sostanze incomplete" in view.tree_master.item(str(sample.id))["values"][9]
+        assert view.tree_master.tag_configure("incomplete_substances")["background"] == "#FCE8E6"
+        view._toggle_sample_selection(sample.id)
+        assert sample.id in view.selected_sample_ids
+        view._load_samples(preserve_selection=True)
+        assert sample.id in view.selected_sample_ids
+        assert test_db.save_sample_with_results(sample, [second], merge=True)[0]
+        view._load_samples()
+        assert sample.id not in view._incomplete_substance_samples
+        assert sample.id in view.selected_sample_ids
+        assert "Sostanze incomplete" not in view.tree_master.item(str(sample.id))["values"][9]
+    finally:
+        view.destroy()
+
+
 @pytest.fixture
 def export_messages(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[str]]:
     """Intercetta solo i popup: esportatore, database e widget restano reali."""

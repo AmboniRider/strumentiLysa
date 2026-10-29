@@ -4,6 +4,6 @@
 # Distributed under the terms of the GNU Affero General Public License v3 or later.
 
 """Pacchetto principale per l'interfaccia Strumenti-LIS."""
-__version__ = "2.2.1"
+__version__ = "2.3.0"
 __author__ = "Amboni Paolo A."
 DATABASE_SCHEMA_VERSION = 1

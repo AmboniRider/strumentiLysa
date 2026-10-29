@@ -530,3 +530,80 @@ def test_bootstrap_checks_archive_before_import(shared_release, installation, tm
     with pytest.raises(ValueError, match="Checksum"):
         aggiorna_intranet.prepare_bootstrap(installation, directory, tmp_path / "non-estratto")
     assert not (tmp_path / "non-estratto").exists()
+
+
+@pytest.fixture
+def publisher(shared_release, tmp_path, monkeypatch):
+    """Publisher con archivi reali sintetici e senza Git, HTTP o condivisioni vive."""
+    import sync_intranet
+    source, manifest = shared_release
+    for name in ("aggiorna_intranet.py", "LEGGIMI-AGGIORNAMENTO.txt", "SHA256SUMS.txt"):
+        (source / name).write_text("documento di prova")
+    def build(root, output):
+        shutil.copytree(source, output)
+        return output / "update-manifest.json"
+    builder = Mock(side_effect=build)
+    monkeypatch.setattr(sync_intranet, "build_intranet_release", builder)
+    root = tmp_path / "sorgenti"
+    root.mkdir()
+    share = tmp_path / "share"
+    share.mkdir()
+    return sync_intranet, root, share, source, builder
+
+
+def test_publisher_copies_only_release_and_skips_same_version(publisher):
+    module, root, share, source, builder = publisher
+    assert module.publish_new_version(root, share)
+    assert {p.name for p in share.iterdir()} == {p.name for p in source.iterdir()}
+    assert all(p.read_bytes() == (source / p.name).read_bytes() for p in share.iterdir())
+    assert not module.publish_new_version(root, share)
+    assert builder.call_count == 1
+
+
+def test_publisher_preserves_future_version(publisher):
+    module, root, share, source, builder = publisher
+    manifest = json.loads((source / "update-manifest.json").read_text())
+    manifest["version"] = "99.0.0"
+    manifest["offline"]["package"] = "strumenti-dependencies-99.0.0.zip"
+    (share / "update-manifest.json").write_text(json.dumps(manifest))
+    assert not module.publish_new_version(root, share)
+    builder.assert_not_called()
+
+
+def test_publisher_refuses_archive_collision(publisher):
+    module, root, share, source, _ = publisher
+    (share / intranet.package_name(__version__)).write_bytes(b"precedente")
+    with pytest.raises(RuntimeError, match="contenuto diverso"):
+        module.publish_new_version(root, share)
+    assert not (share / "update-manifest.json").exists()
+    assert (share / intranet.package_name(__version__)).read_bytes() == b"precedente"
+
+
+def test_publisher_failure_keeps_old_manifest_and_releases_lock(publisher, monkeypatch):
+    module, root, share, source, _ = publisher
+    manifest = json.loads((source / "update-manifest.json").read_text())
+    manifest["version"] = "1.0.0"
+    manifest["offline"]["package"] = "strumenti-dependencies-1.0.0.zip"
+    previous = json.dumps(manifest).encode()
+    (share / "update-manifest.json").write_bytes(previous)
+    replace = module.os.replace
+    def fail(source, target):
+        if target.name == "LEGGIMI-AGGIORNAMENTO.txt":
+            raise OSError("rete interrotta")
+        replace(source, target)
+    monkeypatch.setattr(module.os, "replace", fail)
+    with pytest.raises(OSError, match="rete interrotta"):
+        module.publish_new_version(root, share)
+    assert (share / "update-manifest.json").read_bytes() == previous
+    assert not (share / ".publish.lock").exists()
+    assert not list(share.glob(".upload-*"))
+
+
+def test_publisher_missing_share_or_existing_lock(publisher):
+    module, root, share, _, builder = publisher
+    with pytest.raises(RuntimeError, match="non accessibile"):
+        module.publish_new_version(root, share / "missing")
+    (share / ".publish.lock").mkdir()
+    with pytest.raises(RuntimeError, match="già in corso"):
+        module.publish_new_version(root, share)
+    builder.assert_not_called()

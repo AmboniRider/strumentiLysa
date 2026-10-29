@@ -42,6 +42,17 @@ locale funzionante. Le copie Git usano il normale flusso di sviluppo.
 
 ### Preparazione e pubblicazione intranet
 
+Il comando `sync.bat` automatizza la pubblicazione dopo il push Git sul ramo
+`main`, tramite `sync_intranet.py`. Pubblica solo se la versione locale è
+successiva a quella del manifest condiviso (o il manifest non esiste).
+La directory condivisa deve già esistere. Versioni uguali o precedenti vengono
+saltate senza build/download; gli archivi pubblicati non sono sostituiti con
+contenuti diversi. Un lock SMB evita pubblicazioni contemporanee; in caso di
+arresto improvviso far verificare `.publish.lock` prima di rimuoverlo.
+Se GitHub riesce ma l'intranet fallisce, il batch restituisce errore e lo indica
+esplicitamente. `sync.bat --check` resta locale e non verifica la rete SMB.
+La generazione manuale descritta sotto resta disponibile.
+
 Sul PC che prepara le release serve Internet per scaricare le sole wheel runtime
 dal lock, verificandole rispetto agli hash di `uv.lock`. Generare in una cartella nuova:
 

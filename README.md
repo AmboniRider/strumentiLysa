@@ -30,7 +30,8 @@ tramite driver dedicati.
 - **Correzione di bug:** selezioni di esportazione, eliminazione utenti con
   conservazione dell'audit, primo accesso e aggiornamento del titolo finestra.
 
-La versione tecnica è **2.2.1**. Include aggiornamenti intranet completamente
+La versione tecnica è **2.3.0**, con evidenza e preselezione dei campioni con
+sostanze incomplete. Include aggiornamenti intranet completamente
 offline da `\\srvshare\lab_dati\SOFTWARE_DATI\Strumenti` (vedi `UPDATES.md`).
 La 2.1.0 aggiunge il driver **Agilent 6460 LCMS** e
 corregge la gestione degli esami non mappati: acquisiti e segnalati, vengono
@@ -160,6 +161,18 @@ Il comando registra automaticamente tutte le modifiche non escluse da `.gitignor
 merge e carica i commit su GitHub. Richiede una configurazione Git valida per
 nome/email e l'autenticazione GitHub tramite Git Credential Manager o il metodo
 già configurato su quella postazione. Non memorizza password o token nello script.
+
+Come quinto passo, sul ramo `main`, pubblica anche le **nuove versioni intranet**
+in `\\srvshare\lab_dati\SOFTWARE_DATI\Strumenti`. Richiede `uv`, l'ambiente
+locale preparato con `uv sync`, Internet per preparare le wheel e accesso in
+scrittura alla condivisione. Se la versione condivisa è uguale o superiore,
+salta la pubblicazione. Per distribuire modifiche al programma incrementare
+prima la versione in `src/__init__.py`, `pyproject.toml` e `uv.lock`.
+Archivi e file vengono verificati; il manifest è aggiornato per ultimo.
+Un errore intranet restituisce esito non riuscito e specifica che GitHub è già
+sincronizzato: risolvere rete/permessi e ripetere `sync.bat`.
+Gli altri rami eseguono solo il sync Git. Non vengono creati tag o Release GitHub
+automaticamente dal comando.
 
 In caso di conflitti si interrompe: controllare `git status`, risolvere i file,
 registrare la risoluzione con `git add` e `git commit`, quindi ripetere il comando.

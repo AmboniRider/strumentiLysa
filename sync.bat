@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions DisableDelayedExpansion
-title STRUMENTI LYSA - Sincronizzazione GitHub
+title STRUMENTI LYSA - Sincronizzazione GitHub e intranet
 chcp 65001 > nul
 cd /d "%~dp0"
 
@@ -15,6 +15,8 @@ rem --check verifica solo i prerequisiti, senza commit o accesso alla rete.
 if not "%~1"=="" if /i not "%~1"=="--check" goto usage_error
 where git > nul 2>&1
 if errorlevel 1 goto missing_git
+where uv > nul 2>&1
+if errorlevel 1 goto missing_uv
 git rev-parse --is-inside-work-tree > nul 2>&1
 if errorlevel 1 goto missing_repository
 git remote get-url origin > nul 2>&1
@@ -31,7 +33,7 @@ if not defined SYNC_BRANCH goto detached_head
 if /i "%~1"=="--check" goto check_ok
 
 rem Registra aggiunte, modifiche e rimozioni rispettando .gitignore.
-echo [1/4] Preparazione delle modifiche locali...
+echo [1/5] Preparazione delle modifiche locali...
 git add --all
 if errorlevel 1 goto failure
 git diff --cached --quiet
@@ -43,18 +45,27 @@ if errorlevel 1 (
     echo Nessuna modifica locale da registrare.
 )
 
-echo [2/4] Lettura aggiornamenti da GitHub...
+echo [2/5] Lettura aggiornamenti da GitHub...
 git fetch origin
 if errorlevel 1 goto failure
 
 rem Il merge preserva la storia: nessun reset, rebase o push forzato.
-echo [3/4] Integrazione del ramo remoto %SYNC_BRANCH%...
+echo [3/5] Integrazione del ramo remoto %SYNC_BRANCH%...
 git merge --no-edit "origin/%SYNC_BRANCH%"
 if errorlevel 1 goto merge_failure
 
-echo [4/4] Caricamento delle modifiche su GitHub...
+echo [4/5] Caricamento delle modifiche su GitHub...
 git push --set-upstream origin "%SYNC_BRANCH%"
 if errorlevel 1 goto failure
+echo [5/5] Sincronizzazione nuove versioni intranet...
+if /i not "%SYNC_BRANCH%"=="main" goto skip_intranet
+rem Non riallineare le dipendenze durante il sync: usare l'ambiente gia installato.
+uv run --no-sync python sync_intranet.py
+if errorlevel 1 goto intranet_failure
+goto sync_complete
+:skip_intranet
+echo Pubblicazione intranet saltata: disponibile solo dal ramo main.
+:sync_complete
 echo.
 echo %SYNC_ESC%[96mSincronizzazione completata.%SYNC_ESC%[0m
 exit /b 0
@@ -70,6 +81,13 @@ goto failure
 :missing_git
 echo Git non disponibile. Installare Git e riaprire il terminale.
 goto failure
+:missing_uv
+echo uv non disponibile. Installare uv e preparare l'ambiente con uv sync.
+goto failure
+:intranet_failure
+echo GitHub sincronizzato; pubblicazione intranet non completata.
+echo Controllare rete e permessi, poi rilanciare sync.bat.
+exit /b 1
 :missing_repository
 echo Questa cartella non contiene un repository Git.
 goto failure

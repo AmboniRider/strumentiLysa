@@ -1,3 +1,11 @@
+# Strumenti LYSA 2.3.0 — Miglioramento gestione sostanze incomplete
+
+- I campioni con sostanze mancanti rispetto al catalogo attivo sono evidenziati in rosso e inizialmente deselezionati.
+- È possibile selezionarli manualmente per esportare gli altri esami validi; l'esame incompleto resta escluso e segnalato.
+- Nessuna modifica allo schema del database o al tracciato LIS.
+
+---
+
 # Strumenti LYSA 2.2.1 — Aggiornamenti intranet offline
 
 **Versione tecnica:** 2.2.1 — **Autore:** Amboni Paolo A.

@@ -73,6 +73,7 @@ class MasterDetailView(ctk.CTkFrame):
         self.selected_sample_for_detail: Optional[SampleRecord] = None
         # Cache esclusivamente grafica dello stato LIS del dettaglio mostrato.
         self._detail_exported_ids: Set[int] = set()
+        self._incomplete_substance_samples: Set[int] = set()
 
         self._create_widgets()
         self._load_samples()
@@ -326,7 +327,18 @@ class MasterDetailView(ctk.CTkFrame):
         tree_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
         cols = ("sel", "code", "lab", "year", "acc", "conf", "samp", "params", "imported", "status")
-        self.tree_master = ttk.Treeview(tree_container, columns=cols, show="headings", selectmode="browse")
+        self.tree_master = ttk.Treeview(tree_container, columns=cols, show="headings", selectmode="browse", style="SampleStatus.Treeview")
+        style = ttk.Style(self.tree_master)
+        for option in ("background", "foreground"):
+            style.map("SampleStatus.Treeview", **{
+                option: [entry for entry in style.map("Treeview", option)
+                         if not any("selected" in str(state) for state in entry[:-1])]
+            })
+        self.tree_master.tag_configure("incomplete_substances", background="#FCE8E6", foreground="#9B1C1C")
+        self.tree_master.tag_configure("focused_sample", background="#DCEBFA", foreground="#17324D")
+        self._master_focus_font = tkfont.Font(root=self, font=style.lookup("Treeview", "font") or "TkDefaultFont")
+        self._master_focus_font.configure(underline=True)
+        self.tree_master.tag_configure("focused_incomplete", background="#FCE8E6", foreground="#9B1C1C", font=self._master_focus_font)
 
         self.tree_master.heading("sel", text="Export")
         self.tree_master.heading("code", text="Codice Campione (18 car.)")
@@ -592,6 +604,13 @@ class MasterDetailView(ctk.CTkFrame):
                 s_id: test_set for s_id, test_set in self.selected_tests_by_sample.items() if s_id in current_ids
             }
 
+        catalog: Dict[str, Set[str]] = {}
+        for rule in self.db.get_transcoding_rules_map().values():
+            if rule.lis_substance_code:
+                catalog.setdefault(rule.lis_exam_code, set()).add(rule.lis_substance_code)
+        previous_incomplete = self._incomplete_substance_samples
+        incomplete: Set[int] = set()
+
         # Inizializza le spunte per TUTTI i campioni, anche senza aprirne il
         # dettaglio. Una selezione già esistente può soltanto perdere ID non
         # più presenti: nuovi risultati non devono ampliare un invio preparato.
@@ -599,6 +618,14 @@ class MasterDetailView(ctk.CTkFrame):
             if sample.id is None:
                 continue
             results = self.db.get_sample_results(sample.id)
+            groups: Dict[str, Set[str]] = {}
+            for result in results:
+                if result.has_lis_mapping and result.lis_substance_code:
+                    groups.setdefault(result.lis_exam_code or "", set()).add(result.lis_substance_code)
+            if any(catalog.get(exam, set()) - present for exam, present in groups.items()):
+                incomplete.add(sample.id)
+                if not preserve_selection or sample.id not in previous_incomplete:
+                    self.selected_sample_ids.discard(sample.id)
             available_ids = {r.id for r in results if r.id is not None}
             if sample.id in self.selected_tests_by_sample:
                 self.selected_tests_by_sample[sample.id].intersection_update(available_ids)
@@ -609,13 +636,16 @@ class MasterDetailView(ctk.CTkFrame):
             if not self.selected_tests_by_sample[sample.id]:
                 self.selected_sample_ids.discard(sample.id)
 
+        self._incomplete_substance_samples = incomplete
+
         # Popola tabella Master
         for row in self.tree_master.get_children():
             self.tree_master.delete(row)
 
         for s in self.loaded_samples:
             is_sel = " [✓] " if s.id in self.selected_sample_ids else " [  ] "
-            status_icon = "🟢 Esportato" if s.status == "ESPORTATO" else "🟠 Da Esportare"
+            status_icon = ("🔴 Sostanze incomplete" if s.id in incomplete else
+                           "🟢 Esportato" if s.status == "ESPORTATO" else "🟠 Da Esportare")
 
             sel_tests = len(self.selected_tests_by_sample.get(s.id, set()))
 
@@ -625,6 +655,7 @@ class MasterDetailView(ctk.CTkFrame):
                 "",
                 "end",
                 iid=str(s.id),
+                tags=("incomplete_substances",) if s.id in incomplete else (),
                 values=(
                     is_sel,
                     s.sample_code,
@@ -671,6 +702,11 @@ class MasterDetailView(ctk.CTkFrame):
     # =========================================================================
     def _on_master_row_selected(self, event) -> None:
         sel = self.tree_master.selection()
+        for row in self.tree_master.get_children():
+            is_incomplete = int(row) in self._incomplete_substance_samples
+            tag = ("focused_incomplete" if is_incomplete else "focused_sample") if row in sel else (
+                "incomplete_substances" if is_incomplete else "")
+            self.tree_master.item(row, tags=(tag,) if tag else ())
         if not sel:
             return
         sample_id = int(sel[0])
