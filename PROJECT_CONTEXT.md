@@ -188,6 +188,8 @@ Applicazione desktop per l'interfacciamento tra strumenti di laboratorio (es. Cr
   Verifica locale completa: 280 test superati, inclusi i due collaudi Windows.
   Distribuzione intranet 2.2.1 pubblicata; repository GitHub pubblico verificato
   con richiesta non autenticata.
+  Release stabile GitHub v2.2.1 pubblicata dal workflow 40834342313 (success,
+  280 test superati); client reale e checksum dello ZIP verificati.
 - **2.2.0 (2026-10-29)**: aggiornamenti intranet offline implementati e collaudati;
   280 test superati inclusa installazione Windows reale su copie isolate.
   Distribuzione SMB composta esclusivamente da runtime, dipendenze, bootstrap,

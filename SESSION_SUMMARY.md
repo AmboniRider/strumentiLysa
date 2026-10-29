@@ -25,6 +25,18 @@
   verificabile. Visibilità impostata tramite REST GitHub con autenticazione Git
   già disponibile, solo in memoria; verificato accesso pubblico senza credenziali.
   Repository ora `public`: https://github.com/AmboniRider/strumentiLysa.
+- Commit release `78de357df8fa1dc57d68ee16bf179eee9fb9cbad`, ramo main e tag
+  annotato v2.2.1 sincronizzati con push atomico, senza riscrivere la storia.
+- Workflow Windows `40834342313`, job `123315503033`: **success**;
+  **280 passed in 88.86s**, inclusi entrambi i collaudi Windows reali.
+- Release stabile pubblica: https://github.com/AmboniRider/strumentiLysa/releases/tag/v2.2.1
+  Allegati: `strumenti-update-2.2.1.zip` (293709 byte), `update-manifest.json`.
+- Verificato il vero client updater: da 2.2.0 rileva 2.2.1 su GitHub pubblico
+  e intranet; download GitHub, CRC, SHA-256 dei 41 file e assenza database corretti.
+  SHA-256 dello ZIP GitHub:
+  `456ce50c5ce3d5891a3ef6b7f2a91b34adcd5579b3db74d979adaef72a0a0c61`.
+- Esiti registrati in questo file e PROJECT_CONTEXT.md con commit documentale
+  successivo; il tag v2.2.1 rimane sul commit della release verificata.
 
 ## Aggiornamento intranet offline — 2026-10-29
 ### Decisions and Activities
