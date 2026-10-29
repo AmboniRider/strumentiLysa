@@ -1139,3 +1139,8 @@
 - **Decisioni e attività**: avanzata la versione minore a 2.3.0 per il miglioramento gestione sostanze incomplete; aggiornati metadati e note di rilascio.
 - **Verifiche**: suite completa 284 test superati e 2 saltati; uv.lock coerente. Sincronizzazione GitHub e intranet avviata.
 
+# Sessione 2026-10-29 — Manuale merge sostanze
+
+- **Decisioni e attività**: chiarito il confronto per nome parametro e aggiunto un esempio di aggiornamento di una sostanza già inviata, con indicazione del reinvio completo dell'esame.
+- **Verifica**: confronto con la logica di merge e di esportazione; nessuna modifica al codice o ai dati.
+

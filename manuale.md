@@ -235,6 +235,7 @@ In laboratorio accade frequentemente che uno strumento ri-analizzi un campione p
 Invece di bloccare l'acquisizione o sovrascrivere distruttivamente i dati:
 1. **Nessun Blocco Interattivo**: L'acquisizione procede senza interruzioni e senza fastidiosi popup bloccanti.
 2. **Unione Intelligente dei Test**:
+   - Il confronto usa il nome del parametro fornito dallo strumento, senza distinguere maiuscole e minuscole e ignorando gli spazi iniziali e finali; non usa direttamente i codici LIS di esame o sostanza.
    - **Nuovi Parametri**: Se mappati vengono aggiunti con stato `🟠 Da Inviare`; se non mappati restano conservati come `⚪ Ignorato` e non riaprono un campione già completato.
    - **Parametri Esistenti non ancora Esportati**: Il valore analitico viene aggiornato all'ultima misura rilevata dallo strumento.
    - **Parametri Già Esportati al LIS**: Il valore viene aggiornato alla nuova misura, mentre il timestamp dell'ultima esportazione e lo stato `🟢 Inviato` vengono conservati. La modifica del valore non riapre automaticamente il test per una nuova esportazione.
@@ -249,6 +250,8 @@ Invece di bloccare l'acquisizione o sovrascrivere distruttivamente i dati:
    - Il campione riappare immediatamente nella visualizzazione predefinita pronto per essere esportato!
 5. **Completamento del Campione**:
    - Quando **tutti i parametri mappati** risultano inclusi in un'esportazione CSV, il campione passa a `🟢 Esportato`, anche se conserva non mappati ignorati. Serve almeno un risultato effettivamente inviato: un campione con soli non mappati resta `Da Esportare`.
+
+**Esempio con sostanza**: una sostanza già inviata aveva valore `10`; un nuovo file riporta `12` per lo stesso nome parametro. Il database mostra `12`, ma conserva lo stato `Inviato` e il timestamp precedente: il LIS non riceve automaticamente il nuovo valore. Per trasmettere la rettifica occorre selezionare manualmente tutte le sostanze dell'esame e riesportarle, secondo i controlli di completezza descritti nel capitolo 8.
 
 **Esempio**: un parametro Cloruri è stato esportato con valore `12,3`. Un nuovo file riporta Cloruri `12,8` e aggiunge un test pH. Dopo il merge, Cloruri mostra `12,8` ma resta `Inviato` con il timestamp precedente; il pH è `Da Inviare`. Per esportare anche la rettifica di Cloruri, l'operatore deve selezionarlo nel dettaglio. Lo stato `Inviato` non garantisce che il valore attualmente visualizzato sia quello contenuto nel CSV precedente.
 
